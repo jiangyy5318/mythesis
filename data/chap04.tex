@@ -1,0 +1,177 @@
+\chapter{GPU并行算法}
+\label{cha:china}
+
+
+%伪码1
+\begin{algorithm}
+	\caption{计算$dist(T_{idx,s}^{len},T)$,线程s,块(idx,len)}
+	\label{alg:kernel_ComputeDist}
+	\begin{algorithmic}[1]
+		\Require ~~\\
+		$T_{idx,s}^len$:$block(idx,len)$下线程$s$对应的{\color{red}{候选序列}}；\\
+		$(idx,len)$:GPU计算中的一个block,满足$idx < N,len < L$;\\
+		$T$:整个事件序列；\\
+		\Ensure ~~\\
+		$dist$:$T_{idx,s}^{len}$相对于每个时间序列的距离组成的数组
+		\For{$j$ = $1$ to $N$}
+			\State $buf0[s]$ $\gets$ $0$;
+			\State  $buf[s]$ $\gets$ $0$;
+			\For{$i$ = $1$ to $len$}
+				\State $buf0[s]$ $\gets$ $buf0[s]$ + $(T_{idx,i}-T_{j,s+i})^2$;
+				\State $buf[s]$ $\gets$ $buf[s]$ + $(T_{idx,i+s}-T_{j,s})^2$;
+			\EndFor
+			\State $dist[j] = buf[s]$;
+			\State $syncthreads()$;
+			\For{$u$ = $1$ to $L-len+1$}
+				\State $syncthreads()$;
+				\If{$0 \neq s$}
+					\State $buf[s]$ $\gets$ $buf[s-1]$ + $(T_{idx,s+len}-T_{j,u+len})^2$ - $(T_{idx,s}-T_{j,u})^2$;
+				\EndIf
+				\State $syncthreads()$;
+				\If{$s$ \textbf{is} $0$}
+					\State $buf[s]$ = $buf0[u]$;
+				\EndIf
+				\State $dist[j]$ $\gets$ $min(dist[j],buf[s])$;
+			\EndFor
+		\EndFor
+		%\Return $dist$
+	\end{algorithmic}
+\end{algorithm}
+
+
+%伪码2
+%按照线程描述任务?
+%dist(T_{idx,st},T_j),始于st的候选序列与T_j的DTW距离
+\begin{algorithm}
+	\caption{计算$dist(T_{idx,st},T_j)$,线程(j,tid),块(idx,st)}
+	\label{alg:kernel_Computedtwsperblock}
+	\begin{algorithmic}[1]
+%		\Require ~~\\
+%		$T_{idx,s}^len$:$block(idx,len)$下线程$s$对应的{\color{red}{候选序列}}；\\
+%		$(idx,len)$:GPU计算中的一个block,满足$idx < N,len < L$;\\
+%		$T$:整个事件序列；\\
+%		\Ensure ~~\\
+%		$dist$:$T_{idx,s}^{len}$相对于每个时间序列的距离组成的数组
+		\Function{kernel\_Computedtwsperblock}{$T_{idx,st},T_j$}
+			%\State $CENTER \gets (w+1)/2$;
+			\State $odd \gets \left\lbrace \infty\right\rbrace $
+			\State $even \gets \left\lbrace \infty\right\rbrace $
+			\State $even[center] \gets 0$
+			\For{$u$ = $0$ to $L$}
+				\For{$step$ = $1$ to $longest$}
+					\State Calc the location of the most left-up point:$x_0,y_0$
+					\For{$i$ = $tid$ to $2*w+2$}
+						\State $x \gets x_0 + i, y \gets y_0 - i$
+						\If{$x,y \in prunedtw$}
+							\State $even[i] = (T_{j,x}-T_{idx,y})^2 + \min(even[i],min(odd[i],odd[i+1]))$
+						\EndIf
+					\EndFor
+					%这里需要定义一个Dist(T_i^len,T_j);
+					\State Compare the $even[center]$($Dist(T_{idx,st}^{step},T_{j,u})$) with prior $Dist(T_{idx,st}^{step},T_j)$ and save the minimum.
+					\State Calc the location of the most left-up point:$x_0,y_0$
+					\For{$i$ = $tid$ to $2*w+2$}
+						\State $x \gets x_0 + i, y \gets y_0 - i$
+						\If{$x,y \in prunedtw$}
+							\State $odd[i] = (T_{j,x}-T_{idx,y})^2 + \min(odd[i],min(even[i],even[i+1]))$
+						\EndIf
+					\EndFor
+				\EndFor
+			\EndFor
+		\EndFunction
+	\end{algorithmic}
+\end{algorithm}
+
+%伪码4
+\begin{algorithm}
+	\caption{对于$dist$和对应的$label$进行shuffle,$ReservoirShuffle()$}
+	\label{alg:Reservoir}
+	\begin{algorithmic}[1]
+		\Require ~~\\
+		$dist$:一个{\color{red}{候选序列}}相对每个时间序列的距离数组；\\
+		$label$:对应label;\\
+		$seed$:某个线程的随机种子；\\
+		\Ensure ~~\\
+		$dist$:shuffle之后的$dist$；\\
+		$label$:shuffle之后的$label$;\\
+		\For{$i$ = $2$ to $N$}
+			\State $j$ $\gets$ \Call{random}{$1,i$};
+			\If{$i \neq j$}
+				\State \Call{swap}{$dist,i,j$};
+				\State \Call{swap}{$label,i,j$};
+			\EndIf
+		\EndFor
+		\Return $dist$,$label$
+	\end{algorithmic}
+\end{algorithm}
+
+
+%伪码6
+\begin{algorithm}
+	\caption{使用启发式的方法计算最大熵以及最优分割点$HeuristicSplitInfogain${\color{red}{这个伪代码检查一下0和1,可能需要重新设计}}}
+	\label{alg:HeuristicSplitInfogain}
+	\begin{algorithmic}[1]
+	\Require $dist$数组,$label$数组
+	\Ensure $infogain$,$dividepoint$,$leftis$
+	\Function {partion}{$dist, label, left, right$}
+		\State $pivot$ $\gets$ $dist[right]$;
+		\State $p$ $\gets$ $left$;
+		\For{$q$ = $left$ to $right$}
+			\If{$dist[q] < pivot$}
+				\State \Call{swap}{$dist,p,q$};
+				\State \Call{swap}{$label,p,q$};
+				\State $p$ ++;
+			\EndIf
+		\EndFor
+		\State \Call{swap}{$dist,p,right$};
+		\State \Return $p$;
+	\EndFunction
+	
+	\Function{Entropy}{$a,b$}
+		\If{$a$ \textbf{is} $0$ \textbf{or} $b$ \textbf{is} $0$}
+			\Return $0$;
+		\EndIf
+		\State $pa \gets a/(a+b)$;
+		\State $pb \gets b/(a+b)$;
+		\State \Return $-(pa*\log(pa)+pb*\log(pb)$;
+	\EndFunction
+	
+	\Function{EntropySplit}{$lefta,leftb,righta,rithgb$}
+		\State \Return $((lefta + leftb)*$\Call{Entropy}{$lefta,leftb$} $+(righta+rightb)*$ \Call{Entropy}{$righta,rightb$} $)/(lefta+leftb+righta+rightb)$;
+ 	\EndFunction
+	%\Function{EntropySplit}{$lefta,leftb,righta,rightb$}
+		%\Return $0$ %$((lefta+leftb)*$ %\Call{Entropy}{$lefta,leftb$} $(righta+rightb)*$ \Call{Entropy}{$righta,rightb$} $)/(lefta+leftb+righta+rightb)$;
+	%\EndFuncion
+	\end{algorithmic}
+\end{algorithm}
+
+\begin{algorithm}
+	\caption{对于$dist$和对应的$label$进行shuffle,$ReservoirShuffle()$}
+	\label{alg:HeuristicSplitInfogain2}
+	\begin{algorithmic}[1]
+	\Function {HeuristicSplitInfogain}{$dist,label,N,suma,sumb$}
+		\State $leftacnt,leftbcnt,rightacnt,rightbcnt \gets 0$;
+		\State $left \gets 1,right \gets N$
+		\While{$left < right$}
+			\State $p \gets $ \Call{Partion}{$dist, label, left, right$};
+			\State $lefta2 \gets $ \Call{Count\_if}{$label,left,p,0$};
+			\State $leftb2 \gets $ \Call{Count\_if}{$label,left,p,1$};
+			\State $leftentropy \gets $ \Call{Entropy}{$lefta1+lefta2,leftb1+leftb2$};
+			\State $righta2 \gets $ \Call{Count\_if}{$label,p+1,right,0$};
+			\State $rightb2 \gets $ \Call{Count\_if}{$label,p+1,right,1$};
+			\State $leftentropy \gets $ \Call{Entropy}{$righta1+righta2,rightb1+rightb2$};
+			\If{$leftentropy < rightentropy$}
+				\State $lefta1,leftb2 \gets lefta1 + lefta2,leftb1+leftb2$;
+				\State $left \gets p+1$;
+			\Else
+				\State $righta1,righta2 \gets righta1 + righta2,rightb1+rightb2$;
+				\State $right \gets p-1$;
+			\EndIf
+			
+		\EndWhile
+	\EndFunction
+	\end{algorithmic}
+\end{algorithm}
+
+
+
+
