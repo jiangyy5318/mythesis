@@ -17,9 +17,12 @@
 \usepackage{amsmath}
 \usepackage{color}
 
+
 \floatname{algorithm}{算法}
 \renewcommand{\algorithmicrequire}{\textbf{输入:}}
 \renewcommand{\algorithmicensure}{\textbf{输出:}}
+
+
 \numberwithin{algorithm}{chapter}
 
 
@@ -48,21 +51,25 @@
 
 %%% 正文部分
 \mainmatter
+
 \include{data/chap01}
 \include{data/chap02}
-%自己算法部分
+\include{data/chap03}
 \include{data/chap04}
-
+\include{data/chap05}
+\include{data/chap06}
+%\include{data/sample}
+%\include{data/chapequation}
 %%% 其它部分
 \backmatter
 
 %% 本科生要这几个索引，研究生不要。选择性留下。
 % 插图索引
-\listoffigures
-% 表格索引
-\listoftables
-% 公式索引
-\listofequations
+%\listoffigures
+%% 表格索引
+%\listoftables
+%% 公式索引
+%\listofequations
 
 
 %% 参考文献
@@ -79,9 +86,9 @@
 \include{data/ack}
 
 %% 附录
-\begin{appendix}
-\input{data/appendix01}
-\end{appendix}
+%\begin{appendix}
+%\input{data/appendix01}
+%\end{appendix}
 
 %% 个人简历
 \include{data/resume}
