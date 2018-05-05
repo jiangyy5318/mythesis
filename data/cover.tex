@@ -14,7 +14,7 @@
   %=========
   % 中文信息
   %=========
-  ctitle={基于$DTW$距离测度的$Shapelet$并行算法研究},
+  ctitle={基于DTW距离度量的Shapelet并行算法研究},
   cdegree={工程硕士},
   cdepartment={软件学院},
   cmajor={软件工程},
@@ -36,7 +36,7 @@
   %=========
   % 英文信息
   %=========
-  etitle={Research on Parallel Shapelet Algorithm Based on DTW Distance},
+  etitle={Research on Parallel Shapelet Algorithm Based on Distance Measure of DTW},
   % 这块比较复杂，需要分情况讨论：
   % 1. 学术型硕士
   %    edegree：必须为Master of Arts或Master of Science（注意大小写）
@@ -61,56 +61,51 @@
   % edate={December, 2005}
   %
   % 关键词用“英文逗号”分割
-  ckeywords={\TeX, \LaTeX, CJK, 模板, 论文},
-  ekeywords={\TeX, \LaTeX, CJK, template, thesis}
+  ckeywords={时间序列, GPU, CUDA, 并行, 距离},
+  ekeywords={Time Series, GPU,CUDA, Parellel, Distance}
 }
 
 % 定义中英文摘要和关键字
 \begin{cabstract}
-  论文的摘要是对论文研究内容和成果的高度概括。摘要应对论文所研究的问题及其研究目
-  的进行描述，对研究方法和过程进行简单介绍，对研究成果和所得结论进行概括。摘要应
-  具有独立性和自明性，其内容应包含与论文全文同等量的主要信息。使读者即使不阅读全
-  文，通过摘要就能了解论文的总体内容和主要成果。
 
-  论文摘要的书写应力求精确、简明。切忌写成对论文书写内容进行提要的形式，尤其要避
-  免“第 1 章……；第 2 章……；……”这种或类似的陈述方式。
+在信息时代，数据充斥着各领域并用于帮助我们进行分析和决策，人们也逐渐看到数据潜在的价值。而在大量数据之中，主要是以时间序列形式存在的。越来越多的人研究时间序列挖掘以期获取数据内在的价值，时间序列分类就是时间序列挖掘的重要分支之一。目前在时间序列分类领域，相似度/距离计算仍然占有主要地位，Shapelet分类算法就是其中一种比较重要基于相似度/距离度量的时间序列分类算法。Shapelet算法也有它的缺陷，训练过程比较消耗时间和资源。针对Shapelet分类准确率高而训练时间长这一问题，很多人提出了不少剪枝、降维等方法，但是时间消耗仍然是Shapelet算法的一个关键问题。
 
-  本文介绍清华大学论文模板 \thuthesis{} 的使用方法。本模板符合学校的本科、硕士、
-  博士论文格式要求。
+本文针对Shapelet发现过程耗时问题，提出了基于动态时间规整(Dynamic Time Warping, DTW)距离度量的Shapelet GPU并行算法。该算法主要从下面几个方面对于Shapelet运行时间进行了优化。
 
-  本文的创新点主要有：
-  \begin{itemize}
-    \item 用例子来解释模板的使用方法；
-    \item 用废话来填充无关紧要的部分；
-    \item 一边学习摸索一边编写新代码。
-  \end{itemize}
+1. 提出Shapelet并行算法框架，可以针对较大数据集进行计算，针对不同的数据集大小、时间序列长度选择不同的计算方式，可以保证更高效的计算。
 
-  关键词是为了文献标引工作、用以表示全文主要内容信息的单词或术语。关键词不超过 5
-  个，每个关键词中间用分号分隔。（模板作者注：关键词分隔符不用考虑，模板会自动处
-  理。英文关键词同理。）
+2.在距离计算阶段，采用“重用”策略降低时间复杂度，并且使用统一计算设备架构(Compute Unified Device Architecture, CUDA)的一些优化技术如合并内存访问、归约技术、存储体冲突使有限的图形处理器资源上进行更多的计算。
+
+3.在计算最佳分割点，使用一种启发式计算最佳分割点的方法在保证准确率的基础上来减少计算信息增益需要的时间。
+
+实验表明，本文提出的算法能够大幅提高Shapelet发现的并行速度，相比已有优化算法效率都有较大幅度提高，其中相比原始CPU算法提高834到3692倍，平均1945倍；相比基于剪枝的算法提高21倍到51倍之间，平均41倍；相比已有GPU并行算法提高3倍到21倍，平均13倍。同时，本文并行算法对于大数据集也进行了实验，并取得了较好的结果。
+
+ 
+ 
+%（包括已有并行处理器算法）高13倍左右，其中
+
 \end{cabstract}
 
 % 如果习惯关键字跟在摘要文字后面，可以用直接命令来设置，如下：
 % \ckeywords{\TeX, \LaTeX, CJK, 模板, 论文}
 
 \begin{eabstract}
-   An abstract of a dissertation is a summary and extraction of research work
-   and contributions. Included in an abstract should be description of research
-   topic and research objective, brief introduction to methodology and research
-   process, and summarization of conclusion and contributions of the
-   research. An abstract should be characterized by independence and clarity and
-   carry identical information with the dissertation. It should be such that the
-   general idea and major contributions of the dissertation are conveyed without
-   reading the dissertation.
+	
+In the information age, data is flooded in various fields and is used for analyzing to make some strategic decisions,thus its potential value is gradually discovered by people. Among these data,most are time series. Time series data mining has attracted more and more people to study for their intrinsic value. Classification of time series is one of the most important branches of time series data mining. At present, Similarity/distance calculation is dominating in the time series classification field, Shapelet is one of the important algorithms based on similarity/distance calculation.Shapelet is one of subsequences of time series that has an excellent discriminative power.
+However,the shapelet algorithm also has its drawbacks,that is, Lots of time and resources need to be consumed in the training process. Considering that Shapelet is excellent in high accuracy but is long in training, researchers suggested methods such as pruning, dimensionality reduction. Notwithstanding, time consumption is still a key issue in the Shapelet discovery.
 
-   An abstract should be concise and to the point. It is a misunderstanding to
-   make an abstract an outline of the dissertation and words ``the first
-   chapter'', ``the second chapter'' and the like should be avoided in the
-   abstract.
+To solve the time-consuming problem of Shapelet discovery, A parallel Shapelet algorithm based on distance measure of DTW(Dynamic Time Warping) has been proposed. Many works and optimizations are spent on the algorithm, including the following aspects:
 
-   Key words are terms used in a dissertation for indexing, reflecting core
-   information of the dissertation. An abstract may contain a maximum of 5 key
-   words, with semi-colons used in between to separate one another.
+1. A parallel algorithm framework of Shapelet discovery has been put forward, which can be applied to large datasets and can choose different methods according to the length of time series and the size of the dataset guaranteeing more efficient calculations.
+
+2. At the distance calculation stage, the "reuse" strategy is used to reduce the time complexity, and CUDA's optimization techniques such as combined memory access, Reduced technology,and Bank-Conflict are used to take more avantage of limited graphics processor resources to do more calculations.
+
+3. In the optimal split point calculation stage, a heuristic method used for calculating the optimal split point has been used, which significantly reduced the elapsed time on condition of achieving comparable classification accuracy.
+
+%Experiments show that the proposed algorithm in this paper can greatly increase the parallel speed, which is about 13 times higher than existing optimization algorithms (including existing parallel processor algorithms).	
+
+Experiments show that the algorithm proposed in this paper can greatly increase the parallel speed of Shapelet discovery,which has a significant increasement in efficiency compared with the existing optimization algorithms. The proposed algorithm increased from 834x+ to 3692x+, with an average of 1945x+ compared to the CPU Naive algorithm. The speedup of the algorithm from the pruning-based algorithm is between 21x+ and 51x+, 41x+ in average. the algorithm is faster than the existing GPU parallel algorithms by 3x+$\sim$21x+, 13x+ in average. At the same time, the parallel algorithm of this paper has also conducted experiments on large datasets and achieved excellent perfomance.
+	
 \end{eabstract}
 
 % \ekeywords{\TeX, \LaTeX, CJK, template, thesis}

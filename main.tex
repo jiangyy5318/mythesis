@@ -17,14 +17,31 @@
 \usepackage{amsmath}
 \usepackage{color}
 
+\makeatletter
+\newenvironment{breakablealgorithm}
+{% \begin{breakablealgorithm}
+	\begin{center}
+		\refstepcounter{algorithm}% New algorithm
+		\hrule height.8pt depth0pt \kern2pt% \@fs@pre for \@fs@ruled
+		\renewcommand{\caption}[2][\relax]{% Make a new \caption
+			{\raggedright\textbf{\ALG@name~\thealgorithm} ##2\par}%
+			\ifx\relax##1\relax % #1 is \relax
+			\addcontentsline{loa}{algorithm}{\protect\numberline{\thealgorithm}##2}%
+			\else % #1 is not \relax
+			\addcontentsline{loa}{algorithm}{\protect\numberline{\thealgorithm}##1}%
+			\fi
+			\kern2pt\hrule\kern2pt
+		}
+	}{% \end{breakablealgorithm}
+		\kern2pt\hrule\relax% \@fs@post for \@fs@ruled
+	\end{center}
+}
+\makeatother
 
 \floatname{algorithm}{算法}
 \renewcommand{\algorithmicrequire}{\textbf{输入:}}
 \renewcommand{\algorithmicensure}{\textbf{输出:}}
-
-
 \numberwithin{algorithm}{chapter}
-
 
 
 % 定义所有的图片文件在 figures 子目录下
@@ -38,6 +55,7 @@
 %%% 封面部分
 \frontmatter
 \input{data/cover}
+
 % 如果使用授权说明扫描页，将可选参数中指定为扫描得到的 PDF 文件名，例如：
 % \makecover[scan-auth.pdf]
 \makecover
@@ -77,6 +95,8 @@
 % 如果不需要参考文献，请将下面两行删除或注释掉。
 % 数字式引用
 \bibliographystyle{thuthesis-numeric}
+%\bibliographystyle{unsrt}
+
 % 作者-年份式引用
 % \bibliographystyle{thuthesis-author-year}
 \bibliography{ref/refs}
@@ -95,5 +115,5 @@
 
 %% 本科生进行格式审查是需要下面这个表格，答辩可能不需要。选择性留下。
 % 综合论文训练记录表
-\includepdf[pages=-]{scan-record.pdf}
+%\includepdf[pages=-]{scan-record.pdf}
 \end{document}

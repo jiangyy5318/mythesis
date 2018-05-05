@@ -556,17 +556,12 @@ p(y|\mathbf{x}) = \frac{p(\mathbf{x},y)}{p(\mathbf{x})}=
 \end{multline*}
 
 其实还可以看看这个多级规划：
-\begin{equation}\label{bilevel}
+\begin{equation}\label{bilevel1}
 \left\{\begin{array}{l}
 \max\limits_{{\mbox{\footnotesize\boldmath $x$}}} F(x,y_1^*,y_2^*,\cdots,y_m^*)\\[0.2cm]
 \mbox{subject to:}\\[0.1cm]
 \qquad G(x)\le 0\\[0.1cm]
-\qquad(y_1^*,y_2^*,\cdots,y_m^*)\mbox{ solves problems }(i=1,2,\cdots,m)\\[0.1cm]
-\qquad\left\{\begin{array}{l}
-    \max\limits_{{\mbox{\footnotesize\boldmath $y_i$}}}f_i(x,y_1,y_2,\cdots,y_m)\\[0.2cm]
-    \mbox{subject to:}\\[0.1cm]
-    \qquad g_i(x,y_1,y_2,\cdots,y_m)\le 0.
-    \end{array}\right.
+\qquad(y_1^*,y_2^*,\cdots,y_m^*)\mbox{ solves problems }(i=1,2,\cdots,m)
 \end{array}\right.
 \end{equation}
 这些跟规划相关的公式都来自于刘宝碇老师《不确定规划》的课件。
