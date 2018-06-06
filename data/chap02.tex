@@ -1,4 +1,4 @@
-\chapter{定义和背景}
+\chapter{相关定义}
 \label{cha:chap02}
 
 本章主要对于本文的基础算法和涉及到的GPU/CUDA加速技术进行了介绍。首先介绍Shapelet算法的相关定义和通用算法，并对通用算法时间复杂度进行了分析。然后对于不同的相似度度量方法进行了分析和比较，并对部分相似度/距离度量之间关系进行了介绍。最后，详细介绍了GPU/CUDA并行原理以及本文并行工作使用到的CUDA优化技术。
@@ -8,34 +8,28 @@
 \section{Shapelet相关定义}
 \label{cha:chap02:def}
 本章节介绍Shapelet的相关定义\cite{ye2009time}，这些定义是理解Shapelet发现过程的前提，后文主体部分都是依照本章节进行展开的。
-
 \begin{definition}
-	数据集的表示：对于一个时间序列数据集$D$，和其他数据集一样，都是由输入(时间序列)与输出（类标）组成，数据集通常表示为公式~\ref{equ:chap2:Dataset}形式。其中$T_j$是一个时间序列，$y_j$是其类标，其中$y_j\in{A,B}$，这里及后文中$N$表示时间序列个数，即数据集大小。
+	数据集的表示：对于一个时间序列数据集$D$，和其他数据集一样，都是由输入(时间序列)与输出（类标）组成，数据集通常表示为公式~\ref{equ:chap2:Dataset}形式。其中$T_j$是一个时间序列，$y_j$是其类标，其中$y_j\in\left\lbrace A,B\right\rbrace $，这里及后文中$N$表示时间序列个数，即数据集大小。
 	\begin{equation}
 	\label{equ:chap2:Dataset}
 	D = \left\lbrace (T_1,y_1),(T_2,y_2),\cdots (T_N,y_N)\right\rbrace 
 	\end{equation}
 \end{definition}
-
-
 \begin{definition}
 	时间序列$T_j=t_1,\cdots,t_L$是由$L$个实数组成的有序集合。$t_1,\cdots,t_L$是按时间顺序排列并且具有相同的时间间隔。时间序列$T_j$上的元素$t_p$可以通过$T_{j,p}$来表示。时间序列$T_j$的长度可以用$|T_j|$表示，也可以通过$L$来表示。后文提到的$L$都是数据集中时间序列的长度，而且本文中提到的时间序列都是等长的，长度为$L$。
 \end{definition}
-
 \begin{definition}
 \label{def:chap02:Subsequence}
-	子序列($Subsequence,S$)，对于长度为$L$的时间序列$T_j$，对于任何一个子序列可以由两个参数（ 起始位置$s$和子序列长度$len$）确定唯一的子序列$T_{j,s}^{len}(s.t.\quad s+len <= L)$。对于任意一个子序列$S$的长度可以通过$|S|$来表示，但不能通过$L$表示。
+	子序列($Subsequence,S$)，对于长度为$L$的时间序列$T_j$，对于任何一个子序列可以由两个参数（ 子序列起始位置$s$和长度$len$）确定唯一的子序列$T_{j,s}^{len}(s.t.\quad s+len <= L)$。对于任意一个子序列$S$的长度可以通过$|S|$来表示，但不能通过$L$表示。
 	
-	时间序列$T_j$的子序列集合可以通过$Subset(T_j)$表示，$Subset(T_j)$集合大小为$\frac{L(L+1)}{2}$（这里不包括长度为0的时间序列）。数据$D$的所有子序列集合可以用$SubSet(D)$表示，数据集$D$有$N$个长度为$L$的时间序列，则$SubSet(D)$的集合大小为$\frac{NL(L+1)}{2}$。因为每一个子序列都是Shapelet的候选序列，因此我们把子序列由称为候选序列，$D$对应的子序列集合$SubSet(D)$又称为候选序列集（合）。
+	时间序列$T_j$的子序列集合可以通过$Subset(T_j)$表示，$Subset(T_j)$集合大小为$\frac{L(L+1)}{2}$（这里不包括长度为0的时间序列）。数据$D$的子序列集合可以用$SubSet(D)$表示，数据集$D$有$N$个长度为$L$的时间序列，则$SubSet(D)$的集合大小为$\frac{NL(L+1)}{2}$。因为每一个子序列都是Shapelet的候选序列，因此我们把子序列由称为候选序列，$D$对应的子序列集合$SubSet(D)$又称为候选序列集（合）。
 \end{definition}
-
 \begin{definition}
 	\label{def:chap2:Dist}
 	时间（子）序列$A,B$之间的距离$Dist(A,B)$，用于表示具有相同长度的时间(子)序列$A$和时间(子)序列$B$的相似度。
 	
 	原始Shapelet算法使用欧式距离(Euclidean distance)作为子序列相似度度量，但是作为距离，只要满足对称性、非负性、三角不等式形式的，就可以满足$Dist(A,B)$的要求，这里$Dist(A,B)$可以扩展到其他广义距离，包括曼哈顿距离，欧氏距离，$DTW$距离等。
 \end{definition}
-
 \begin{definition}
 \label{def:chap2:SubDist}
 	候选序列$S$到时间序列$T_j$之间的距离（必须满足$|S|<=|T_j|$），是$T_j$序列中所有长度为$|S|$的子序列与$S$距离$Dist(T_{j,p}^{|S|},S),p=1\to L-|S|+1$的最小值，如公式~\ref{equ:chap2:SubDist}。
@@ -53,7 +47,6 @@
 	\mathcal{F} = \left\lbrace (SubDist(S,T_1),y_1),(SubDist(S,T_2),y_2),\cdots,(SubDist(S,T_N),y_N) \right\rbrace 
 	\end{equation}
 \end{definition}
-
 \begin{definition}
 	\label{def:chap02:infogain}
 	信息增益,根据特征$A$将训练数据集$D$划分为$M$个子集$D_1,D_2,\cdots,D_M$，特征$A$对于数据集$D$的信息增益$g(D,A)$是数据集D的信息熵$H(D)$和在$A$给定条件下经验条件熵$H(D|A)$之差,即公式~\ref{equ:chap02:Infogain}。$A$特征对应的信息增益越大，则说明特征$A$的分类能力越强，Shapelet使用信息增益作为候选序列筛选的标准。
@@ -61,35 +54,30 @@
 	\label{equ:chap02:Infogain}
 	g(D,A) = H(D) - H(D|A) = H(D) - \sum_{i=1}^{M}\frac{|D_i|}{|D|}H(D_i|A)
 	\end{equation}
-	候选序列$S$与数据集$D$中每一个时间序列$T_j,j=1,2,\cdots,N$的距离$SubDist(S,T_j)$，其中$SubDist(S,T_j)$的所有取值分布在$(0,\infty)$区间，如图~\ref{fig:SubDist}。候选序列$S$和分割点$d_{th}$共同作为特征$(S,d_{th})$将数据集$D$分为$D_1 = \left\lbrace T_j,SubDist(S,T_j)<d_{th},j=1\to N\right\rbrace $和$D_2 = \left\lbrace T_j,SubDist(S,T_j) \geq d_{th},j=1\to  N\right\rbrace$两部分。特征$(S,d_{th})$相对数据集的信息增益为数据集$D$的信息熵减去子集$D_1$和子集$D_2$的信息熵的权重和，如公式~\ref{equ:chap2:Infogain2}
-	\begin{equation}
-	\label{equ:chap2:Infogain2}
-	g(D,(S,d_{th})) =H(D)-H(D|(S,d_{th})) = H(D)-(\frac{|D_1|}{|D|}H(D_1)+\frac{|D_2|}{|D|}H(D_2))
-	\end{equation}	
+	候选序列$S$与数据集$D$中每一个时间序列$T_j,j=1,2,\cdots,N$的距离$SubDist(S,T_j)$，其中$SubDist(S,T_j)$的所有取值分布在$(0,\infty)$区间，如图~\ref{fig:SubDist}。候选序列$S$和阈值$d_{th}$共同作为特征$(S,d_{th})$将数据集$D$分为$D_1 = \left\lbrace T_j,SubDist(S,T_j)<d_{th},j=1\to N\right\rbrace $和$D_2 = \left\lbrace T_j,SubDist(S,T_j) \geq d_{th},j=1\to  N\right\rbrace$两部分。特征$(S,d_{th})$相对数据集的信息增益为数据集$D$的信息熵减去子集$D_1$和子集$D_2$的信息熵的权重和，如公式~\ref{equ:chap2:Infogain2}
+	\begin{figure}[H] % use float package if you want it here
+		\centering
+		\includegraphics[height=4.2cm]{SubDistDistribution.png}
+		\caption{$SubDist(S,T_j),T_j\in D$在$(0,\infty)$的分布}
+		\label{fig:SubDist}
+	\end{figure}
 \end{definition}
-
-\begin{figure}[H] % use float package if you want it here
-\centering
-\includegraphics{SubDistDistribution.png}
-\caption{$SubDist(S,T_j),T_j\in D$在$(0,\infty)$的分布}
-\label{fig:SubDist}
-\end{figure}
-
+	\begin{equation}
+\label{equ:chap2:Infogain2}
+g(D,(S,d_{th})) =H(D)-H(D|(S,d_{th})) = H(D)-(\frac{|D_1|}{|D|}H(D_1)+\frac{|D_2|}{|D|}H(D_2))
+\end{equation}	
 \begin{definition}
 	\label{def:optimalsplitpoint}
-	最佳分割点:在候选序列$S$下，有多个分割点$d_{th}$，如图~\ref{fig:SubDist}，在这些分割点中，存在一个阈值$d_{osp(S)}$（或者是一段区间），满足$g(D,(S,d_{osp(S)})) \geq g(D,(S,d_{th})),\forall d_{th}\in \mathbb{R}_{+}$，则将$d_{osp(S)}$记为候选序列$S$对应的最佳分割点，而特征$(S,d_{dsp(S)})$在是$S$对应的最佳分割特征。
+	最佳分割点:在候选序列$S$下，有多个阈值$d_{th}$，如图~\ref{fig:SubDist}，在这些分割点中，存在一个阈值$d_{osp(S)}$（或者是一段区间），满足$g(D,(S,d_{osp(S)})) \geq g(D,(S,d_{th})),\forall d_{th}\in \mathbb{R}_{+}$，则将$d_{osp(S)}$记为候选序列$S$对应的最佳分割点。
 \end{definition}
-
 数据集$D$中有$O(NL^2)$个候选序列，即有$O(NL^2)$个特征组合$(S,d_{osp(S)})$，需要选取分类能力最高的特征组合，分类能力最高特征组合中的候选序列即为Shapelet，如定义~\ref{def:choose}。
-
 \begin{definition}
 	\label{def:choose}
 	数据集$D$中的Shapelet，使用$Shapelet(D)$表示。对于给定数据集，存在一个子序列$Shapelet(D)$，使$g(D,(Shapelet(D),d_{osp(Shapelet(D))})) \geq g(D,(S,d_{osp(S)})),\forall S\in SubSet(D)$。$(Shapelet(D),d_{osp(Shapelet(D))})$特征将作为Shapelet算法那最终的分类器。
 \end{definition}
-
 \begin{definition}
 	\label{def:chap03:Threephases}
-	Shapelet计算过程三阶段:本文将Shapelet计算过程分为三个阶段，分别为距离计算阶段、最佳分割点计算阶段、候选序列筛选阶段。其中距离计算阶段是指从候选序列$S$和数据集$D$到$S$相对数据集$D$所有时间序列计算距离获取距离-类标对的集合$\mathcal{F}$的过程，即计算$\mathcal{F}$的过程；最佳分割点计算阶段是指从$\mathcal{F}$到对应的最佳分割点$d_{osp(S)}$以及对应的信息增益的过程，相当于定义~\ref{def:optimalsplitpoint}过程；候选序列筛选阶段是指从多个候选序列根据信息增益选出Shapelet的过程，相当于定义~\ref{def:choose}过程。章节~\ref{cha:chap03:Problemsencountered:BigDataSet}解释了为什么从中间结果$\mathcal{F}$处分成两个阶段，章节~\ref{cha:chap03:modelduty}解释了为了要从最佳分割点处分为两个阶段。
+	Shapelet计算过程三阶段:本文将Shapelet计算过程分为三个阶段，分别为距离计算阶段、最佳分割点计算阶段、候选序列筛选阶段。其中距离计算阶段是指从候选序列$S$和数据集$D$到$S$相对数据集$D$所有时间序列计算距离获取距离-类标对的集合$\mathcal{F}$的过程，即计算$\mathcal{F}$的过程；最佳分割点计算阶段是指从$\mathcal{F}$到对应的最佳分割点$d_{osp(S)}$以及对应的信息增益的过程，相当于定义~\ref{def:optimalsplitpoint}过程；候选序列筛选阶段是指从多个候选序列中选出分类能力最高的候选序列，相当于定义~\ref{def:choose}过程。章节~\ref{cha:chap03:Problemsencountered:BigDataSet}解释了为什么从中间结果$\mathcal{F}$处分成两个阶段，章节~\ref{cha:chap03:modelduty}解释了为了要从最佳分割点处分为两个阶段。
 \end{definition}
 
 从以上定义来看，时间序列可以分类的前提是，数据集中的一类（比如$A$类）存在一种模式（波形），这种模式和$A$类时间序列($T_j,y_i\in A$)表现出较小的距离，和另一类$B$类时间序列($T_j,y_i\in B$)表现出较大的距离。而Shapelet算法那就是负责寻找能够区分这两类时间序列的模式以及对应的距离阈值的算法。%Shapelet对于所有的候选序列$(S,d_{osp(S)})$按照对于$D$的信息增益进行评价，选出信息增益最大的候选序列和对应的距离阈值$(Shapelet(D),d_{osp(Shapelet(D))})$。
@@ -103,9 +91,9 @@
 		\Function{ShapeletNaiveAlg}{$D$}
 		%\State $CENTER \gets (w+1)/2$;
 			\State $lastS \gets \phi, lastinfogain \gets 0, lastdosp \gets 0, leftisAorB\gets A$ 
-			\ForAll{$S \in SubSet(D)$} \label{Code:Set}
-				\State $\mathcal{F} = \left\lbrace (...,SubDist(S,T_j),y_j),...\right\rbrace,j = 1,2,\cdots,N$ \label{Code:calcSubDist}
-				\State 计算$g(D,(S,d_{osp(S)}))$ \label{Code:infogain}
+			\ForAll{$S \in SubSet(D)$} \label{Code:Set} //O($NL^2$)个候选序列
+				\State $\mathcal{F} = \left\lbrace (...,SubDist(S,T_j),y_j),...\right\rbrace,j = 1,2,\cdots,N$ \label{Code:calcSubDist} //O($NL^2$)
+				\State 计算$g(D,(S,d_{osp(S)}))$ \label{Code:infogain}  //O($N\log(N)$)
 				\If{$g(D,(S,d_{osp(S)})) > lastinfogain$}
 					\State 更新$lastinfogain$,$lastS$,$lastdospd_{osp(S)}$,$leftisAorB$
 				\EndIf
@@ -119,14 +107,14 @@
 
 $line$~\ref{Code:calcSubDist}是对于计算一个候选序列$S$相对于数据集$D$中每个时间序列$T_j$的过程，时间复杂度为$O(NL^2)$;
 
-$line$~\ref{Code:infogain}是寻找一个阈值$d_{osp(S)}$与候选序列$S$配合满足$g(D,(S,d_{osp(S)})) \geq g(D,(S,d_{th})),\forall d_{th}\in \mathbb{R}_{+}$，时间复杂度为$O(N\log(N))$。
+$line$~\ref{Code:infogain}是寻找一个阈值$d_{osp(S)}$与候选序列$S$共同作为特征满足$g(D,(S,d_{osp(S)})) \geq g(D,(S,d_{th})),\forall d_{th}\in \mathbb{R}_{+}$，时间复杂度为$O(N\log(N))$。
 
 $line$~\ref{Code:Set}:$SubSet(D)$集合大小为$O(NL^2)$，因此$line$~\ref{Code:Set}处循环为$O(NL^2)$次；循环内部时间复杂度为$O(NL^2)$。
 
 %对于数据集$D$中所有候选序列$SubSet(D)$都经过$line$~\ref{Code:calcSubDist}-\ref{Code:infogain}两步的评估过程，$SubSet(D)$集合大小为$O(NL^2)$。
 因此Shapelet通用算法的时间复杂度为$O(N^2L^4)$，这个时间复杂度非常高，特别$N,L$比较大的情况，严重地影响执行时间。
 
-\section{相似度/距离测度方法}
+\section{相似度/距离度量方法}
 \label{cha:chap02:Distance}
 
 章节~\ref{cha:chap02:def}描述的相似度/距离计算都是基于两个时间（子）序列$A,B$的相似性度量$Dist(A,B)$进行的，本章节就$Dist(A,B)$展开介绍。时间序列相似性/距离是许多计算系统的核心，同时也是时间序列聚类和分类的最重要的组成部分之一~\cite{patidar2012analysis}。正是由于相似度/距离度量的重要性，多种相似度/距离度量的方法先后被提出。在本章节中，我们对于几个具有代表性的时间序列相似度/距离度量及其所属类别进行评估，相似度/距离计算可以简单分为\cite{ding2008querying}：锁步距离测量（欧氏距离）、基于特征测量（傅里叶系数）、基于模型测量（自回归）、弹性测量（动态时间规整、实数序列的编辑距离）。
@@ -136,7 +124,7 @@ $line$~\ref{Code:Set}:$SubSet(D)$集合大小为$O(NL^2)$，因此$line$~\ref{Co
 对于两个时间序列$A=\left\lbrace a_1,a_2,\cdots,a_M\right\rbrace$和$B=\left\lbrace b_1,b_2,\cdots,b_M\right\rbrace$，本章主要讨论欧氏距离、实数序列的编辑距离、动态时间规整距离进行介绍并比较。
 
 \subsection{欧氏距离}
-欧氏距离是使用最普遍的距离测度方法，是度量$M$维空间上的两个点的直线距离，使用$Dist(A,B)$或者$Euclid(A,B)$表示。将欧氏距离应用在时间（子）序列上，要求两个时间序列$A,B$的长度相等$|A|=|B|$。在实际使用中经常将欧式距离的定义会进行扩展，使用两个长度相等时间序列$A,B$的差的$L_n$范数作为欧氏距离~\cite{serra2014empirical}，如公式~\ref{equ:chap2:DistEuclid}。有时候，为了便于计算，经常使用$\sum_{i=1}^{M}(A_i-B_i)^n$记做欧氏距离，其中$n=1$，为曼哈顿距离，$n=2$，为狭义欧氏距离，$n$一般会作为一个底层距离参数，可以根据情况调节。
+欧氏距离是使用最普遍的距离度量方法，是度量$M$维空间上的两个点的直线距离，使用$Dist(A,B)$或者$Euclid(A,B)$表示。将欧氏距离应用在时间（子）序列上，要求两个时间序列$A,B$的长度相等$|A|=|B|$。在实际使用中经常将欧式距离的定义会进行扩展，使用两个长度相等时间序列$A,B$的差的$L_n$范数作为欧氏距离~\cite{serra2014empirical}，如公式~\ref{equ:chap2:DistEuclid}。有时候，为了便于计算，经常使用$\sum_{i=1}^{M}(A_i-B_i)^n$记做欧氏距离，其中$n=1$，为曼哈顿距离，$n=2$，为狭义欧氏距离，$n$一般会作为一个底层距离参数，可以根据情况调节。
 \begin{equation}
 \label{equ:chap2:DistEuclid}
 Euclid(A,B) = (\sum_{i=1}^{M}(A_i-B_i)^n)^{\frac{1}{n}}
@@ -170,7 +158,6 @@ Euclid(A,B) = (\sum_{i=1}^{M}(A_i-B_i)^n)^{\frac{1}{n}}
 \end{figure}
 
 $A$和$B$之间的DTW距离用$DTW(A,B)$来表示，$DTW(A,B)$的递归方程如公式~\ref{equ:chap2:costMatrix}~\cite{sart2010accelerating}\footnote{n=1,2}。
-
 \begin{equation}
 \label{equ:chap2:costMatrix}
 \begin{array}{l}
@@ -209,9 +196,7 @@ d(0,0)=0;d(i,0)=\infty;d(0,j)=\infty;i=1,2,\cdots,M;j=1,2,\cdots,M
 	\end{minipage}
 \end{figure}
 
-
-
-\begin{algorithm}
+\begin{breakablealgorithm}
 	\caption{DTW距离计算（$Sakoe-Chuba-band$限制区域）}
 	\label{alg:fastdtw}
 	\begin{algorithmic}[1]
@@ -233,7 +218,7 @@ d(0,0)=0;d(i,0)=\infty;d(0,j)=\infty;i=1,2,\cdots,M;j=1,2,\cdots,M
 			\State \Return $D_{M,M}$
 		\EndFunction
 	\end{algorithmic}
-\end{algorithm}
+\end{breakablealgorithm}
 
 \subsection{实数序列的编辑距离}
 实数序列的编辑距离~\cite{chen2005robust}(Edit Distance on Real Sequence,~EDR)可以视为原始编辑距离算法在实数序列领域的扩展，递归方程如公式~\ref{equ:chap2:EDR}。
@@ -260,8 +245,9 @@ EDR要求时间序列长度相等$|A|=|B|$，主要是基于和DTW距离相同�
 %在过去的十年中，已经提出了超过一百种不同的时间序列距离测量方法[12]。 然而越来越多的经验证据表明动态时间翘曲（DTW）（包括欧几里得距离作为一种特殊情况）是跨越广泛领域的最佳测量方法[7]。
 %[12]Keogh, E. J. and Kasetty, S. On the Need for Time Series Data Mining Benchmarks: A Survey and Empirical Demonstration. Data Min. Knowl. Discov. 7(4): 349-371 (2003).
 
-如图~\ref{fig:Sakoe-Chuba-band}，当$w=0$时，DTW代价矩阵将会退化成代价矩阵的对角线，$D(i,j)$的递推方程也将变为沿对角线递归，如图~\ref{fig:Sakoe-Chuba-band}黄色部分和~\ref{equ:chap2:dtwdeg2euclid1}递归方程，因此，当$w=0$时，时间序列的距离$DTW(A,B,0)$则退化欧式距离。%，如公式~\ref{equ:chap2:dtwdeg2euclid2}
+如图~\ref{fig:Sakoe-Chuba-band}，当$w=0$时，DTW代价矩阵将会退化成代价矩阵的对角线，$D(i,j)$的递推方程也将变为沿对角线递归，如图~\ref{fig:Sakoe-Chuba-band}黄色部分和~\ref{equ:chap2:dtwdeg2euclid1}递归方程，因此，当$w=0$时，时间序列的距离$DTW(A,B,0)$则退化欧式距离。
 
+当$w=0$时，在DTW距离计算等价于欧氏距离，但是相比欧式距离会多出$2M$个比较计算过程和$2M$次访存过程。
 \begin{equation}
 \label{equ:chap2:dtwdeg2euclid1}
 \begin{array}{l}
@@ -277,12 +263,25 @@ DTW(A,B,0) = d(M,M) = \sum_{i=1}^{M}|a_i-b_i|_n = Euclid(A,B)
 \end{array}
 \end{equation}
 
-当$w=0$时，在DTW距离计算等价于欧氏距离，但是相比欧式距离会多出$2M$个比较计算过程和$2M$次访存过程。
+
+
+\subsection{相似度/距离度量方法选择}
+
+在章节~\ref{cha:chap02:Distance}前面部分介绍各种相似度/距离以及存在的联系。本章节需要选出适用的相似度/距离计算作为Shapelet的相似度/距离调用子程序。
+
+欧式距离$Euclid(A,B)$是Shapelet原始算法的相似度/距离度量，是时间序列数据挖掘应用上有很健壮的性能指标。欧式距离相比其他距离度量的优势在于时间复杂度低，但由于欧氏距离是锁步距离，要求序列上的元素一一对应。
+
+DTW距离$DTW(A,B,w)$容许时间序列进行局部延长和压缩，能够克服欧氏距离由于时间序列发生扭曲而无法进行匹配的问题。DTW距离的时间复杂度为$O(wM)$，这里$w$作为控制时间序列扭曲程度一个参数，一般比较小（只有时间序列过度扭曲才需要很大的限制区域即$w$很大来包含时间序列之间的规整路径），因此，$DTW(A,B,w)$中$w$取值范围为$\left[ 0,C\right),s.t. C << M $，时间复杂度仍为线性。章节~\ref{chap02:euclid2Dtw}对于欧氏距离和DTW关系进行了介绍，欧式距离是DTW的特殊形式，存在$DTW(A,B,w)\leq DTW(A,B,w=0) = Euclid(A,B)$关系，使用$DTW(A,B,w)$作为相似度/距离调用在保持欧式距离的健壮性基础上，可以使时间序列进行一定扭曲来进行匹配。
+
+EDR需要提前确定一个超参数$\epsilon$或者对于$EDR(A,B)$中$A,B$进行标准化，所以不适合作为Shapelet作为相似度/距离调用。
+
+综上所述，本文选择$DTW(A,B,w),w\in \left[0,C\right),s.t. C << M$作为Shapelet的相似度/距离度量。当$w>0$时，距离计算阶段采用的距离度量是$DTW(A,B,w)$；而当$w=0$时，为了避免不必要的计算，距离计算阶段采用$DTW(A,B,w)$距离度量的等价方案$Euclid(A,B)$。因此，距离计算阶段会根据$w$的不同分为：w>0距离计算模块和w=0距离计算模块。
+
 
 \section{GPU/CUDA并行原理及相关优化技术}
 \label{cha:chap03:gpu-HW-Arch}
 
-GPU/CUDA并行采用单指令多数据(Single Instruction Multiple Data,~SIMD)并行方式的。SIMD并行是将数据元素映射到并行处理线程交由相同的程序处理。本章节首先从GPU硬件架构和CUDA并行原理方面进行介绍并行技术，其中，GPU硬件结构部分介绍GPU的硬件结构组成构成并行的基础，CUDA并行原理部分来说明CUDA如何利用GPU硬件完成并行任务的。然后在GPU/CUDA并行原理的基础上介绍本文用到的CUDA优化技术。GPU加速并行并没有改变算法的时间复杂度，而是在CPU执行时间的基础上除以一个常数，这个常数由两个因素决定，一是GPU结构及流处理器簇个数和每个流处理器簇中流处理器个数，二是与优化技术和算法的结合以及算法本身的实现有关。硬件基础没有办法改变，更多的是依靠算法实现和优化技术，一个高效的优化算法相比一般的优化算法也会有很大的速度区别，比如归约中的$kernel7$相比$kernel1$在$4M$元素下加速倍数为21倍~\cite{harris2007optimizing}。章节~\ref{cha:chap02:coalesced}-章节~\ref{cha:chap02:bankconflict}详细地介绍了本文用到的CUDA优化技术，包括合并存储器访问、隐藏延时、线程束分歧、存储体冲突等
+GPU/CUDA并行采用单指令多数据(Single Instruction Multiple Data,~SIMD)并行方式的。SIMD并行是将数据元素映射到并行处理线程交由相同的程序处理。本章节首先从GPU硬件架构和CUDA并行原理方面进行介绍并行技术，其中，GPU硬件结构部分介绍GPU的硬件结构组成构成并行的基础，CUDA并行原理部分来说明CUDA如何利用GPU硬件完成并行任务的。然后在GPU/CUDA并行原理的基础上介绍本文用到的CUDA优化技术。GPU加速并行并没有改变算法的时间复杂度，而是在CPU执行时间的基础上除以一个常数，这个常数由两个因素决定，一是GPU结构及流处理器簇个数和每个流处理器簇中流处理器个数，二是与优化技术和算法的结合以及算法本身的实现有关。硬件基础没有办法改变，更多的是依靠算法实现和优化技术，一个高效的优化算法相比一般的优化算法也会有很大的速度区别，比如归约中的$kernel7$相比$kernel1$在$4M$元素下加速倍数为21倍~\cite{harris2007optimizing}。章节~\ref{cha:chap02:coalesced}-章节~\ref{cha:chap02:bankconflict}详细地介绍了本文用到的CUDA优化技术，包括合并内存访问、隐藏延时、线程束分歧、存储体冲突等
 
 本章节的图~\ref{fig:GPU-HW-Arch}和图~\ref{fig:nvidia-cuda-arch}全部根据文献~\cite{nickolls2009graphics}和文献~\cite{lippert2009nvidia}综合绘制。本章节介绍GPU/CUDA并行和CUDA相关技术都是以英伟达的图形处理器为例介绍的，对于其他加速设备以及并行技术没有覆盖。
 \subsection{GPU硬件结构}
@@ -314,7 +313,7 @@ GPU/CUDA并行采用单指令多数据(Single Instruction Multiple Data,~SIMD)�
 		\begin{tabular}{p{2cm}p{2.1cm}p{3cm}p{2cm}p{2cm}}
 			\toprule[1.5pt]
 			{\heiti 内存种类} & {\heiti 访存延时} (时钟周期)&{\heiti 内存大小} &{\heiti 可见范围} &{\heiti 周期}\\\midrule[1pt]
-			全局内存 & $\sim$400-600 & 8G & 线程网格 & 整个过程 \\
+			全局内存  & $\sim$400-600 & 8G  & 线程网格  & 整个过程 \\
 			共享内存 & $\sim$20 & 48K(每个线程块) & 线程块 & 线程 \\
 			寄存器 & $\sim$1 & 64K(每个线程块) & 线程块 & 线程 \\
 			本地内存 & $\sim$400-600 & 同全局内存 & 线程块 & 线程 \\
@@ -353,12 +352,12 @@ GPU/CUDA并行采用单指令多数据(Single Instruction Multiple Data,~SIMD)�
 
 多个Warp在4个Warp调度单元通过分时复用的方式进行并行运行，同样道理，一个Grid中大量的Block在20个SM中运行的原理是一致的，都是利用计算资源分时复用的方法。CUDA并行是由成千上万的线程并行完成的，这些线程在软件层面是同时并行的，但是在物理层面最多只有2560个线程在运行，其他都在挂起或者就绪状态。
 
-\subsection{合并存储器访问}
+\subsection{合并内存访问}
 \label{cha:chap02:coalesced}
 
-从表~\ref{tab:memory}可以看出访问全局内存是内存访问耗时最长的环节，但全局内存又是GPU内存最大的部分，当处理大量数据的并行时，不可避免地使用全局内存，这样必然导致大量的全局内存读写操作而产生访存延时，全局内存访问有可能成为性能优化的瓶颈。这里可以通过合并存储器访问~\cite{nvidia2012c}来解决全局内存访问耗时问题。
+从表~\ref{tab:memory}可以看出访问全局内存是内存访问耗时最长的环节，但全局内存又是GPU内存最大的部分，当处理大量数据的并行时，不可避免地使用全局内存，这样必然导致大量的全局内存读写操作而产生访存延时，全局内存访问有可能成为性能优化的瓶颈。这里可以通过合并内存访问~\cite{nvidia2012c}来解决全局内存访问耗时问题。
 
-合并存储器访问(Coalesced Memory Access,~Coalesced)，是当特定的访问条件满足时，设备可以将一个Warp内所有线程的全局内存访问操作合并成一个事务。这里特定的条件是一个Warp内线程访问连续的128B空间，而且线程和全局内存地址一一对应（ 但不要求严格顺序对齐），如图~\ref{fig:coalesced}~\cite{woolley2013gpu}。这种合并存储器访问模式只需要经过一次L1缓存的过程，大大地提高了全局内存访问速度，由图~\ref{fig:coalesced}红色区域表示。
+合并内存访问(Coalesced Memory Access,~Coalesced)，是当特定的访问条件满足时，设备可以将一个Warp内所有线程的全局内存访问操作合并成一个事务。这里特定的条件是一个Warp内线程访问连续的128B空间，而且线程和全局内存地址一一对应（ 但不要求严格顺序对齐），如图~\ref{fig:coalesced}~\cite{woolley2013gpu}。这种合并内存访问模式只需要经过一次L1缓存的过程，大大地提高了全局内存访问速度，由图~\ref{fig:coalesced}红色区域表示。
 
 \begin{figure}[H] % use float package if you want it here
 	\centering
@@ -366,7 +365,7 @@ GPU/CUDA并行采用单指令多数据(Single Instruction Multiple Data,~SIMD)�
 	\caption{合并内存访问(所有线程一个L1缓存行)}
 	\label{fig:coalesced}
 \end{figure}
-合并存储器访问加速全局内存访问可以通过Cache命中观点来解释：当一个Warp的32线程同时读写连续的128B空间，假设某个线程首先读取了128B空间中的某个地址，设备会将这连续的128B空间缓存到L1缓存行中(设备中L1缓存行的大小为128B)，其他31个线程再进行读写这个128B地址空间时，可以直接命中到L1缓存行,而Cache的访问时延远小于全局内存，不需要经过内存读写挂起的过程，大大地降低了访问时延。
+合并内存访问加速全局内存访问可以通过Cache命中观点来解释：当一个Warp的32线程同时读写连续的128B空间，假设某个线程首先读取了128B空间中的某个地址，设备会将这连续的128B空间缓存到L1缓存行中(设备中L1缓存行的大小为128B)，其他31个线程再进行读写这个128B地址空间时，可以直接命中到L1缓存行,而Cache的访问时延远小于全局内存，不需要经过内存读写挂起的过程，大大地降低了访问时延。
 
 当一个warp的连续线程访问连续空间但没有按照L1对齐时，会请求两个128B的L1缓存行，如图~\ref{fig:Nocoaleced}，会出现两次缓存L1的过程，至少需要经过两个全局内存时延等待。而且这种情况一般会伴随着同一个128B地址被两个warp访问，如果同一个128B地址被两个warp访问，而且这两个warp又不在一个SM中，就会因为考虑数据一致性的问题而导致延时。
 
@@ -377,9 +376,9 @@ GPU/CUDA并行采用单指令多数据(Single Instruction Multiple Data,~SIMD)�
 	\label{fig:Nocoaleced}
 \end{figure}
 
-合并存储器访问大大减少了全局内存访问时延，一般数据量过大的并行计算都是需要全局内存配合合并存储器访问来解决。同时，合并存储器访问、全局内存、共享内存结合使用可以完成很多复杂操作，比如矩阵转置等。
+合并内存访问大大减少了全局内存访问时延，一般数据量过大的并行计算都是需要全局内存配合合并内存访问来解决。同时，合并内存访问、全局内存、共享内存结合使用可以完成很多复杂操作，比如矩阵转置等。
 
-%为了尽量减少全局内存访问延时，减少等待时间，一方面需要增加一个Block内的Warp个数，对于访存时间进行隐藏，另外一方面，使用合并存储器访问减少全局内存访问时延出现的次数。%将一个warp内多个线程计算的结果存储在连续的全局内存地址上，并且保证一个Warp对应能够缓存的128B地址。
+%为了尽量减少全局内存访问延时，减少等待时间，一方面需要增加一个Block内的Warp个数，对于访存时间进行隐藏，另外一方面，使用合并内存访问减少全局内存访问时延出现的次数。%将一个warp内多个线程计算的结果存储在连续的全局内存地址上，并且保证一个Warp对应能够缓存的128B地址。
 
 \subsection{延时隐藏}
 
@@ -429,21 +428,21 @@ GPU/CUDA并行采用单指令多数据(Single Instruction Multiple Data,~SIMD)�
 \begin{figure}
 	\begin{minipage}{0.3\textwidth}
 		\centering
-		\includegraphics[height=6.2cm]{bank.png}
+		\includegraphics[height=5.5cm]{bank.png}
 		\caption{共享内存存储体}
 		\label{fig:bank}
 	\end{minipage}
 	\hfill
 	\begin{minipage}{0.30\textwidth}
 		\centering
-		\includegraphics[height=6.2cm]{banknoconflict.png}
+		\includegraphics[height=5.5cm]{banknoconflict.png}
 		\caption{No bank Conflict}
 		\label{fig:NobankConflict}
 	\end{minipage}
 	\hfill
 	\begin{minipage}{0.30\textwidth}
 		\centering
-		\includegraphics[height=6.2cm]{bankconflict.png}
+		\includegraphics[height=5.5cm]{bankconflict.png}
 		\caption{bank Conflict}
 		\label{fig:bankConflict}
 	\end{minipage}
@@ -463,6 +462,6 @@ Bank Conflict经常出现在多个线程访问不连续的共享内存的情况�
 \section{本章小结}
 %本章主要对于本文的基础算法和涉及到的GPU/CUDA加速技术进行了介绍。首先介绍Shapelet算法的相关定义和通用算法，并对通用算法时间复杂度进行了分析。然后对于不同的相似度度量方法进行了分析和比较，最后，详细介绍了GPU/CUDA并行原理以及本文并行工作使用到的CUDA优化技术。
 
-本章首先介绍了Shapelet的相关定义和计算过程，为本文展开工作铺垫基础。然后对于Shapelet通用算法进行了描述，并分析了其时间复杂度，指明了Shapelet发现过程耗时的原因。之后对不同的相似度/距离度量方法进行了比较和分析，并对部分相似度/距离度量之间关系进行了介绍。最后对于GPU/CUDA并行原理和后文使用到的CUDA优化技术进行了详细介绍，为后文并行工作的描述打下基础。
+本章首先介绍了Shapelet的相关定义和计算过程，为本文展开工作铺垫基础。然后对于Shapelet通用算法进行了描述，并分析了其时间复杂度，指明了Shapelet发现过程耗时的原因。然后对不同的相似度/距离度量方法进行了比较和分析，并对部分相似度/距离度量之间关系进行了介绍，选择了$DTW(A,B,w)$作为本文Shapelet方案的度量距离。最后对于GPU/CUDA并行原理和后文使用到的CUDA优化技术进行了详细介绍，为后文并行工作的描述打下基础。
 
 

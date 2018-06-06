@@ -1,32 +1,19 @@
 \chapter{基于DTW距离度量的Shapelet并行算法设计}
 \label{cha:chap04:myalg}
 
-%本章首先~\ref{cha:chap04:myalg:Overview}介绍基于DTW距离度量的Shapelet并行算法总体流程、并行方案，整个流程主要按照定义~\ref{def:chap03:Threephases}的三个阶段来执行的：距离计算阶段(~\ref{cha:chap04:myalg:DTW}，~\ref{cha:chap04:myalg:euclid})、最佳分割点计算阶段(~\ref{cha:chap04:myalg:infogain})、候选序列筛选阶段。
 
-第三章主要介绍了基于DTW距离度量的Shapelet算法并行总体方案和流程以及一些并行前置技术。本章主要对于各并行模块的并行算法进行详细介绍，主要包括w>0距离计算阶段并行方案、w=0距离计算阶段并行方案、最佳分割点阶段并行方案。其中，候选序列筛选阶段因为主要是参考规约算法完成，可以参考文献~\cite{harris2007optimizing}中规约过程，在本章节中不做体现；CPU计算最佳分割点阶段采用和GPU计算最佳分割点采用相同的算法，在本章也不做叙述。
-%第二章介绍了Shapelet的通用算法和基本定义，第三章介绍了GPU/CUDA并行原理、并行的难点，本章在前面介绍Shapelet和GPU/CUDA相关技术的基础上，提出了基于DTW距离度量的Shapelet并行算法。
+第三章主要介绍了基于DTW距离度量的Shapelet算法并行总体方案和流程以及并行化需要解决问题。本章主要对于各模块的并行算法进行详细介绍，主要包括w>0距离计算模块并行方案、w=0距离计算模块并行方案、GPU最佳分割点计算模块并行方案。其他三个模块不在本章介绍，中间变量的存储在~\ref{cha:chap03:Problemsencountered:BigDataSet}已经介绍；CPU最佳分割点计算模块采用和GPU最佳分割点计算采用相同的算法，只是在CPU中执行；候选序列筛选模块是一个典型的规约过程，可以参考文献~\cite{harris2007optimizing}中规约过程。
 
-\section{w>0距离计算阶段并行方案}
+\section{w>0距离计算模块并行方案}
 \label{cha:chap04:myalg:DTW}
-本章主要介绍$w>0$时，距离计算阶段并行所使用的并行策略、并行算法设计、以及实现细节和性能考虑。在这一章讨论的都是基于$DTW(A,B,w)$距离讨论的。
+本章主要介绍w>0距离计算模块并行所使用的并行策略、并行算法设计、以及实现细节和性能考虑。在这一章讨论的都是基于$DTW(A,B,w)$距离讨论的。
 
 \subsection{并行策略}
 
-$w>0$距离计算阶段并行策略部分主要介绍$DTW(A,B,w)$如何使用“重用”策略降低算法时间复杂度和空间复杂度，以及如何被多线程并行利用。
+这一部分主要从重复性和依赖性两个角度介绍w>0距离计算模块并行策略。通过“重用”策略降低该模块的算法时间复杂度和空间复杂度，通过减少依赖性使该模块已于并行。
 
-首先，介绍一下如何使用重用策略降低算法时间复杂度。在章节~\ref{cha:chap02:generalalganalysis}提及，距离计算$Dist(A,B)$/$DTW(A,B,w)$是Shapelet算法中时间复杂度最高的操作，时间复杂度为$O(wN^2L^4)$。但是对于某个候选序列$S = T_{i,s}^{len}$，在进行距离计算阶段进行$\mathcal{F}$的计算，如公式~\ref{equ:chap04:dtwreuse}，其中的最基本运算是$DTW(T_{i,s}^{len},T_{j,p}^{len},w)$。
-%\begin{equation}
-%\label{equ:chap04:dtwreuse}
-%\mathcal{F}=\left\lbrace SubDist(S,T_j),j=1,2,\cdots,N\right\rbrace  =\left\lbrace \min_{p=1\to L-len+1}(DTW(T_{i,s}^{len},T_{j,p}^{len},w)),j=1,\cdots,N\right\rbrace 
-%\end{equation}
+首先，讨论一下w>0距离计算模块存在的重复计算。在w>距离计算模块中，对于某个候选序列$S = T_{i,s}^{len}$，都会存在距离$\mathcal{F}$的计算，如公式~\ref{equ:chap04:dtwreuse}，其中的最基本运算是$DTW(T_{i,s}^{len},T_{j,p}^{len},w)$。但是在整个w>0距离计算模块即对于所有候选序列$T_{i,s}^{len}$而言，数据集$D$中任何两个长度相等的子序列$T_{i,s}^{len}$和$T_{j,p}^{len}$都会计算发生DTW距离计算过程，公式~\ref{equ:chap04:BasicOp}是所有距离计算的集合。数据集$D$中每两个长度相等的子序列都存在距离计算，因此w>0距离计算模块存在重复计算。
 
-%\begin{equation}
-%\label{equ:chap04:dtwreuse}
-%\begin{array}{l}
-%\mathcal{F}=\left\lbrace SubDist(S,T_j),j=1,2,\cdots,N\right\rbrace \\ [0.3cm]
-%=\left\lbrace \min_{p=1\to L-len+1}(DTW(T_{i,s}^{len},T_{j,p}^{len},w)),j=1,\cdots,N\right\rbrace 
-%\end{array}
-%\end{equation}
 \begin{equation}
 \label{equ:chap04:dtwreuse}
 \begin{split}
@@ -35,18 +22,6 @@ $w>0$距离计算阶段并行策略部分主要介绍$DTW(A,B,w)$如何使用“
 \end{split}
 \end{equation}
 
-而对于整个Shapelet发现过程，即对于整个$SubSet(D)$中的所有候选序列$T_{i,s}^{len}$而言，公式~\ref{equ:chap04:BasicOp}是所有距离计算的集合，从公式中可以看出，数据集中任何两个长度相等的子序列$T_{i,s}^{len}$和$T_{j,p}^{len}$都会计算发生$DTW(A,B,w)$过程。%，长度为$len$的$DTW(A,B,w)$计算如公式~\ref{equ:chap04:BasicOp}。
-%\begin{equation}
-%\label{equ:chap04:BasicOp}
-%DTW(T_{i,s}^{len},T_{j,p}^{len},w),i=1\to N,j=1\to N,s=1\to L-len+1,p=1\to L-len+1
-%\end{equation}
-%\begin{equation}
-%\label{equ:chap04:BasicOp}
-%\begin{array}{l}
-%DTW(T_{i,s}^{len},T_{j,p}^{len},w),s.t.~i=1\to N,j=1\to N \\ [0.3cm]
-%s=1\to L-len+1,p=1\to L-len+1 
-%\end{array}
-%\end{equation}
 \begin{equation}\label{equ:chap04:BasicOp}
 \left\{\begin{array}{l}
 \left\lbrace DTW(T_{i,s}^{len},T_{j,p}^{len},w) \right\rbrace \\[0.1cm]
@@ -57,18 +32,14 @@ $w>0$距离计算阶段并行策略部分主要介绍$DTW(A,B,w)$如何使用“
 \end{array}\right.
 \end{equation}
 
+然后分析如何利用重复性降低该模块算法的时间复杂度？这里使用这里使用$A_{1:len}=T_{i,s}^{len}$来代替一组起点位置相同的候选序列$T_{i,s}^{len},len=1\to M$，使用$B_{1:len}=T_{j,p}^{len}$来代替$T_{j,p}^{len},len=1\to M$来讨论重复计算。如图~\ref{fig:DTWParallel}所示，在$DTW(A_{1:M},B_{1:M},w)$的动态计算过程中可以囊括M个距离计算$DTW(A_{1:m},B_{1:m},w),m=1,2,\cdots,M$。$DTW(A_{1:m+1},B_{1:m+1},w)$距离计算的结果可以视为在$DTW(A_{1:m},B_{1:m},w)$的基础上完成，时间复杂度均摊到每一对距离计算$DTW(A_{1:m},B_{1:m},w)$为$O(w)$而不是$O(wL)$或$O(wM)$的时间复杂度。候选序列$S$计算$\mathcal{F}$的过程包含$O(NL)$个$DTW(T_{i,s}^{len},T_{j,p}^{len},w)$计算，因此w>0距离计算模块$\mathcal{F}$的均摊时间复杂度为$O(wNL)$。在数据集$D$所有候选序列集合$SubSet(D)$大小为$O(NL^2)$，因此使用重用策略时，基于DTW距离度量的Shapelet算法时间复杂度为$O(NL^2*wNL)=O(wN^2L^3)$。而原始基于DTW度量的Shapelet发现算法时间复杂度为$O(wN^2L^4)$，通过重用策略将整个算法的时间复杂度L倍，从而降低执行时间。算法~\ref{alg:originplus}是使用重用策略下基于DTW距离度量的Shapelet串行算法。
 
+并行过程能否顺利执行和DTW计算的空间复杂度有很大关系，在并行计算中，DTW计算需要占据共享内存空间，使用过多的资源有可能使并行线程个数降低，因此DTW计算的空间复杂度必须降低。如何降低DTW计算的空间复杂度，$DTW(A_{1:m+1},B_{1:m+1},w)$都是依赖$DTW(A_{1:m},B_{1:m},w)$的计算结果而来的，而$DTW(A_{1:m+1},B_{1:m+1},w)$的计算和$DTW(A_{1:m},B_{1:m},w)$之前的代价矩阵元素没有关系，因此计算时只需要保留和$DTW(A_{1:m},B_{1:m},w)$之间的代价矩阵部分元素即可，如图~\ref{fig:DTWParallel}中并行依赖计算部分，因此空间复杂度为$O(w)$，这样可以大大减少共享内存的使用。
 
-对于长度$len,len=1\to M$不同的$DTW(T_{i,s}^{len},T_{j,p}^{len},w)$计算有这大量的重复计算，这里使用$A_{1:len}=T_{i,s}^{len}$，$B_{1:len}=T_{j,p}^{len}$来代替$T_{i,s}^{len},T_{j,p}^{len}$讨论重复计算。如图~\ref{fig:DTWParallel}所示，在$DTW(A_{1:M},B_{1:M},w)$的动态计算过程中可以囊括M个距离计算$DTW(A_{1:m},B_{1:m},w),m=1,2,\cdots,M$。而在使用重用策略下，$DTW(A_{1:m+1},B_{1:m+1},w)$可以视为在$DTW(A_{1:m},B_{1:m},w)$的基础上完成，时间复杂度均摊到每一对距离计算$DTW(A_{1:m},B_{1:m},w)$为$O(w)$而不是$O(wL)$的时间复杂度。因为候选序列$S$计算$\mathcal{F}$的过程包含$O(NL)$个$DTW(T_{i,s}^{len},T_{j,p}^{len},w)$计算，单个候选序列$S$计算$\mathcal{F}$的均摊时间复杂度为$O(wNL)$。在数据集$D$所有候选序列集合$SubSet(D)$共有$O(NL^2)$个元素，因为使用重用策略时，基于DTW距离度量的Shapelet算法时间复杂度为$O(NL^2*wNL)=O(wN^2L^3)$。而原始基于DTW度量的Shapelet发现算法时间复杂度为$O(wN^2L^4)$，通过重用策略可以降低整个算法的时间复杂度，降低执行时间。算法~\ref{alg:originplus}是使用重用策略下基于DTW度量的Shapelet串行算法。
-%同理，在基于DTW度量的Shapelet算法上，
-%$SubDist(T_{i,s}^{L-s},T_j),j=1,2,\cdots,N$可以包含$SubDist(T_{i,s}^{len},T_j),len=1,2,\cdots,L-s,j=1,2,\cdots,N$，总的时间复杂度为$O(wNL^2)$，而每个候选序列$S=T_{i,s}^{len}$均摊时间复杂度。=
-%假设$A_{1:M},B_{1:M}$是数据$D$中任意两个长度为$M$的子序列或候选序列，
-%$S$和所有等长的时间子序列(候选序列)都进行了距离计算。也就是说，在Shapelet算法中，任何两个长度相等的子序列都会进行一次距离计算，距离计算之间存在着关系，在这些距离计算之间可以通过一些重用的策略避免每一个对距离计算都要花费$O(wL)$（$DTW(A,B,w)$的时间复杂度）的时间。
-%而在数据集$D$中,$T_{i,s},i=1,2,\cdots,N,s=1,2,\cdots,L$这样的元素候选序列有$O(NL)$个，而$SubDist(T_{i,s}^{L-s},T_j),j=1,2,\cdots,N$中包含$O(NL)$个$DTW(A,B,w)$计算，则Shapelet算法的时间复杂度为$O(NL*NL*wL)=O(wN^2L^3)$。
 \begin{figure}[H] % use float package if you want it here
 	\centering
 	\includegraphics[height=8.2cm]{DTWParallel.png}
-	\caption{“重用”降低时间空间复杂度和如何并行$DTW(A,B,w)$计算}
+	\caption{w>0距离计算模块的重复性和依赖性分析}
 	\label{fig:DTWParallel}
 \end{figure}
 \begin{algorithm}
@@ -97,9 +68,7 @@ $w>0$距离计算阶段并行策略部分主要介绍$DTW(A,B,w)$如何使用“
 	\end{algorithmic}
 \end{algorithm}
 
-并行过程能否顺利执行和DTW计算的空间复杂度有很大关系，因为在并行计算中，DTW计算需要占据共享内存空间。如何降低DTW计算的空间复杂度，$DTW(A_{1:m+1},B_{1:m+1},w)$都是依赖$DTW(A_{1:m},B_{1:m},w)$的计算结果而来的，而$DTW(A_{1:m+1},B_{1:m+1},w)$的计算和$DTW(A_{1:m},B_{1:m},w)$之前的代价矩阵元素没有关系，因此计算时只需要保留和$DTW(A_{1:m},B_{1:m},w)$之间的代价矩阵部分元素即可，如图~\ref{fig:DTWParallel}中并行依赖计算部分，因此空间复杂度为$O(w)$，这样可以大大减少共享内存的使用。
-
-最后讨论一下如何使用多线程对于$DTW(A_{1:m+1},B_{1:m+1},w)$并行计算。如图~\ref{fig:DTWParallel}，将从$DTW(A_{1:m+1},B_{1:m+1},w)$到$DTW(A_{1:m},B_{1:m},w)$之间计算过程提取出来，分别$even$和$odd$表示偶数和奇数对角线的元素，则原本代价矩阵中的递归方程将从$d_{x,y}=|a_x-b_y|_n + \min(d_{x,y},d_{x-1,y},d_{x,y-1})$变为公式~\ref{equ:chap04:dtwparallelequ}方程。
+最后从依赖性角度来叙述一下如何使用多线程对于$DTW(A_{1:m+1},B_{1:m+1},w)$进行并行计算。将从$DTW(A_{1:m+1},B_{1:m+1},w)$到$DTW(A_{1:m},B_{1:m},w)$之间计算过程放大，如图~\ref{fig:DTWParallel}右侧并行依赖部分，分别$even$和$odd$表示偶数和奇数对角线的元素，可以使原本代价矩阵中的递归方程将$d_{x,y}=|a_x-b_y|_n + \min(d_{x,y},d_{x-1,y},d_{x,y-1})$横平竖直的更新方式变为公式~\ref{equ:chap04:dtwparallelequ}方程斜对角交替更新方式，这样大大地降低了线程之间的依赖从而降低执行时间。这样就可以通过$even$和$odd$交替更新完成整个代价矩阵上的元素$D_{x,y}$的更新，而且可以通过多并行线程完成。至于$t$和$x,y$的关系可以通过一定的对应方式计算，这里不做过多介绍。这里并行计算$DTW(A,B,w)$的线程个数为$w+1$的公约数$y,s.t. mod(w+1,y)=0$为宜，因为并行依赖区域的宽度最大为$w+1$，使用$y$个线程并行计算$D_{x,y}$可以保证多个线程的执行内容是均衡的，不会造成计算资源的浪费。
 \begin{equation}
 \label{equ:chap04:dtwparallelequ}
 D_{x,y} = 
@@ -108,30 +77,23 @@ even_t=|a_x-b_y|_n+\min(even_t,odd_t,odd_{t+1}) & \text{if $x+y$ is even }\\
 odd_{t+1}=|a_x-b_y|_n+\min(odd_{t+1},even_t,,even_{t+1}) & \text{if $x+y$ is odd}\\
 \end{cases}
 \end{equation}
-这样就可以通过$even$和$odd$交替更新完成整个代价矩阵上的元素$D_{x,y}$的更新，而且可以通过多并行线程完成，至于$t$和$x,y$可以通过一定的对应方式计算，这里不做过多介绍。这里并行计算一个$DTW(A,B,w)$的线程个数为$w+1$的公约数$y,s.t. mod(w+1,y)=0$为宜，因为并行依赖区域的宽度最大为$w+1$，使用$y$个线程并行计算$D_{x,y}$可以保证多个线程的执行内容是均衡的，不会造成计算资源的浪费。
-
-%的并行依赖计算部分是对于相邻的两个$DTW(A_{1:m},B_{1:m},w)$
-%
-%为了多线程可以配合计算一个
-%在DTW测度距离$DTW(A_{1:M},B_{1:M},w)$过程中，涵盖了$M-1$个$DTW(A_{1:i},B_{1:i}),i=1,2,\cdots,M-1$距离结果，当每个$DTW(A_{1:i},B_{1:i}),i=1,2,\cdots,M$单独计算时,每个时间复杂度为$O(wM)$,总体时间复杂度为$O(wM^2)$;当$DTW(A_{1:i},B_{1:i}),i=1,2,\cdots,M$一起计算时，$DTW(A_{1:i+1},B_{1:i+1})$在$DTW(A_{1:i},B_{1:i})$的基础上计算，时间复杂度为$O(w)$，当使用这种增量的算法逐步计算所有DTW距离时，总的时间复杂度为$O(wM)$。
-%
-%$SubDist(S,T_j)$是在$O(L)$个距离值中取最低值，根据上面提到的增量计算，$SubDist(S_{1:i+1},T_j)$在$SubDist(S_{1:i},T_j)$基础上计算的时间复杂度为$O(wL)$。$\mathcal{F}$包含$N$个$SubDist(S_{1:i+1},T_j)$计算，其中$j=1,2,\cdots,N$，则$\mathcal{F}_{S(1:i+1)}$在$\mathcal{F}_{S(1:i)}$基础上计算时间复杂度为$O(wNL)$。
-
-%{\color{red}{两个相互依赖的DTW计算中间的依赖空间复杂度是$O(w)$,可以参考一下算法~\ref{alg:originplus}}}
-
-
-%{\color{red}{原始算法需要放在前面去}}
-
-%在算法~\ref{alg:originplus}中，算法只计算集合$\left\lbrace T_{i,s}^{L-s},i=1,2,\cdots,N,s=1,2,\cdots,L \right\rbrace$中所有候选序列$S$和数据集$D$中所有时间序列$T_j$的距离$\mathcal{F}_{S}$，至于$\mathcal{F}_{S(1:i)},i=1,2,\cdots,|S|$都会在$\mathcal{F}_{S}$计算过程中产生。
-
-%{\color{red}{空间复杂度这块是为了节省共享内存使用，可以放在技巧哪里和DTW并行计算一块进行}}
-%$\mathcal{F} = SubDist(S,T_j),j=1,2,\cdots,N$计算只需要$Dist(A,B)$或$DTW(A,B,w)$的结果，并不需要知道$A,B$的如何进行对齐的，因此只要保留$O(2w)$的空间即可完成结果计算。
-%关于$DTW(A,B,w)$的空间复杂度，$DTW(A_{1:i+1},B_{1:i+1})$都是基于$DTW(A_{1:i},B_{1:i})$基础计算的，只需要保留两者之间限制区域的元素即可，不需要其他空间，而且空间可以交替使用，因此在$DTW(A,B,w)$只需要保留$O(2w)$的空间即可，不需要$O(wL)$的空间复杂度。
-
 
 \subsection{并行算法设计}
 
-本章节主要根据伪码介绍一个Block的多个线程是如何运行的，其中$Block(i,s)$中线程$(tidx,~)$负责$T_i$中以$s$位置为起始的所有候选序列$T_{i,s}^{len},len=1\to L-s$和几个时间序列$T_j$的距离，如\ref{equ:chap04:everythread}。
+有了并行策略介绍之后，然后介绍一下每个线程的内容以及线程使如何进行组织的。这里每个线程负责一组候选序列$T_{i,s}^{len},len=1\to L-s$和一个或多个时间序列$T_j,j=\left\lbrace tid_x,tid_x+dim_{tidx},tid+2*dim_{tidx}\right\rbrace $的距离，如公式~\ref{equ:chap04:everythread}，其中这组候选序列起始位置相同。
+
+\begin{equation}\label{equ:chap04:everythread}
+\left\{\begin{array}{l}
+\left\lbrace SubDist(T_{i,s}^{len},T_j) \right\rbrace \\[0.1cm]
+\mbox{subject to:}\\[0.1cm]
+\qquad len=1\to (L-s)\\[0.1cm]
+\qquad j=\left\lbrace tid_x,tid_x+dim_{tidx},tid+2*dim_{tidx}\right\rbrace 
+\end{array}\right.
+\end{equation}
+
+$Block(i,s)$中线程$(tidx,~)$负责公式~\ref{equ:chap04:everythread}的计算，$Block(i,s)$中的所有线程组合承线程块$Block(i,s)$，负责这组候选序列和所有时间序列$T_j$的距离。多个线程块$Block(i,s)$组成计算网格$grid$完成w>0距离计算模块的计算
+
+
 %\begin{equation}
 %\label{equ:chap04:everythread}
 %SubDist(T_{i,s}^{len},T_j),len=1\to(L-s),j=\left\lbrace tid_x,tid_x+dim_{tidx},tid+2*dim_{tidx},\cdots \right\rbrace 
@@ -143,14 +105,7 @@ odd_{t+1}=|a_x-b_y|_n+\min(odd_{t+1},even_t,,even_{t+1}) & \text{if $x+y$ is odd
 %j=\left\lbrace tid_x,tid_x+dim_{tidx},tid+2*dim_{tidx},\cdots \right\rbrace 
 %\end{array}
 %\end{equation}
-\begin{equation}\label{equ:chap04:everythread}
-\left\{\begin{array}{l}
-\left\lbrace SubDist(T_{i,s}^{len},T_j) \right\rbrace \\[0.1cm]
-\mbox{subject to:}\\[0.1cm]
-\qquad len=1\to (L-s)\\[0.1cm]
-\qquad j=\left\lbrace tid_x,tid_x+dim_{tidx},tid+2*dim_{tidx}\right\rbrace 
-\end{array}\right.
-\end{equation}
+
 
 算法~\ref{alg:kernel_ComputedtwsperblockForAll}是关于$Block(i,s)$中线程$(tidx,~)$运行过程，下面对于算法进行简单介绍：
 
@@ -211,22 +166,22 @@ odd_{t+1}=|a_x-b_y|_n+\min(odd_{t+1},even_t,,even_{t+1}) & \text{if $x+y$ is odd
 
 \subsection{实现细节与性能考虑}
 \label{cha:chap04:myalg:DTW:trick}
-前两部分介绍了Shapelet并行策略和算法，这一部分就一些实现细节和性能考虑进行了阐述，主要从全局内存访问和存储体冲突两个角度进行介绍：
+前两部分介绍了Shapelet并行策略和算法，这一部分就一些实现细节和性能考虑进行了阐述，主要从合并内存访问和存储体冲突两个角度进行介绍：
 
 \begin{figure}[H] % use float package if you want it here
 	\centering
 	\includegraphics[height=7.2cm]{DTWglobalMem.png}
-	\caption{$w>0$距离计算阶段中$\mathcal{F}$在全局内存中存储方式}
+	\caption{$w>0$距离计算模块中合并内存访问的使用}
 	\label{fig:DTWglobalMem}
 \end{figure}
 
-首先，介绍一下全局内存访问Coalesced和基于DTW度量的Shapelet算法结合。因为在算法~\ref{alg:kernel_ComputedtwsperblockForAll}中$line$~\ref{code:dtwcompare0toL}设计大量的全局内存访存过程，对于一个Block来说，需要经历$O(NL^2)$次访存，如果不做任何处理，会造成大量的等待延时，从而影响执行时间。
+首先，介绍一下合并内存访问Coalesced和基于DTW度量的Shapelet算法结合。因为在算法~\ref{alg:kernel_ComputedtwsperblockForAll}中$line$~\ref{code:dtwcompare0toL}设计大量的全局内存访存过程，对于一个线程块Block来说，需要经历$O(NL^2)$次访存，如果不做任何处理，会造成大量的等待延时，从而影响执行时间。
 
-算法~\ref{alg:kernel_ComputedtwsperblockForAll}中$line$~\ref{code:dtwcompare0toL}并不是只有一个线程进行访存操作，而是有$dim_{tidx}$($line$~\ref{code:DTWCoalesced})个线程完成$DTW(T_{i,s}^{len},T_j),j=m*dim_{tidx}+1\to (m+1)*dim_{tidx}$一个过程，这$dim_{tidx}$个线程同时一段内存进行操作，这段内存是$T_{i,s}^{len}$对应的$\mathcal{F}$的$m*dim_{tidx}+1\to (m+1)*dim_{tidx}$位置，即$\mathcal{F}_{m*dim_{tidx}+1\to (m+1)*dim_{tidx}}$，当$dim_{tidx}=16,m=1$时，对应图~\ref{fig:DTWglobalMem}中红色部分。
+这里使线程块中的线程负责候选序列和连续的多个时间序列$T_j,j=m*dim_{tidx}+1\to (m+1)*dim_{tidx}$的距离，对于距离$\mathcal{F}$一段连续地址$m*dim_{tidx}+1\to (m+1)*dim_{tidx}$即$\mathcal{F}_{m*dim_{tidx}+1\to (m+1)*dim_{tidx}}$。合并内存访问Coalesced可以将这多个线程对于这段连续地址的访问合并成为一个事务，如图~\ref{fig:DTWglobalMem}红色部分所示，多个线程正在合并访问$\mathcal{F}_{17\to 32}$，这样可以大幅度降低全局内存访存延时，从而降低执行时间。
 
-合并内存访问的应用是如何进行的？如图~\ref{fig:DTWglobalMem}，一个Block内的线程每循环一次，获得$\mathcal{F}_{16m+1\to16m+16}=SubDist(T_{i,s}^{len},T_j),j=16m+1,16m+2,\cdots,16m+16,m=0,1,2,\cdots$。$\mathcal{F}_{16m+1\to 16m+16}$在全局内存中是连续的地址空间，Block中的多个线程可以通过内存合并访问来提高全局内存访问效率。
+然后介绍一下存储体冲突和算法结合使用，算法~\ref{alg:kernel_ComputedtwsperblockForAll}中的$even$和$odd$变量是使用共享内存存储的，$even$和$odd$与多线程配合完成$DTW(A,B,w)$的计算过程。$even$和$odd$在共享内存中占$2w+4$大小的共享内存，这样容易造成一个存储体被多个线程访问即存储体冲突Bank-Conflict，当$w=6$时情况最严重，16个线程访问同一个存储体，出现16-way Conflict现象。这种多个线程访问同一个存储体使得线程访问存储体被大量序列化，从使执行效率大大降低。
 
-然后介绍一下存储体冲突和算法结合使用，算法~\ref{alg:kernel_ComputedtwsperblockForAll}中的$even$和$odd$变量是使用共享内存存储的，$even$和$odd$与多线程配合完成$DTW(A,B,w)$的计算过程。$even$和$odd$在共享内存中占$2(w+2)$大小的共享内存，这样容易造成存储体冲突Bank-Conflict，最起码会产生2-Way Conflict现象，当$w=6$时出现16-way Conflict，使得线程访问存储体被大量序列化，使执行效率大大降低。
+我们需要进行存储体冲突的避免操作，这里将连续的两个线程的访问间隔$stride$设置为大于实际$2w+4$的最小奇数，即$stride=2w+5$，可以保证半个线程束Warp内的所有线程可以访问到不同存储体。因为$stride$为奇数时，和偶数(16)没有公约数，在$stride*16$的地址范围内不可能出现在同一个存储体内，如图~\ref{fig:BankConflictEven}，使用奇数$stride=5$,可以保证$(5m+n)\%16,m=0,1,2,\cdots,..,n < 5$的地址可以分到16个存储体中。
 
 \begin{figure}[H] % use float package if you want it here
 	\centering
@@ -235,35 +190,29 @@ odd_{t+1}=|a_x-b_y|_n+\min(odd_{t+1},even_t,,even_{t+1}) & \text{if $x+y$ is odd
 	\label{fig:BankConflictEven}
 \end{figure}
 
-这里将连续的两个线程的访问间隔$stride$设置为大于实际$2(w+2)$的最小奇数，即$stride=2w+5$，可以保证半个Warp内的所有线程可以访问到不同存储体，因为$stride$为奇数时，和偶数(16)没有公约数，在$stride*16$的地址范围内不可能出现在同一个存储体内，如图~\ref{fig:BankConflictEven}，使用奇数$stride=5$,可以保证$(5m+n)\%16,m=0,1,2,\cdots,..,n < 5$可以分到16个存储体上。
-
-
-\section{w=0距离计算阶段并行方案}
+\section{w=0距离计算模块并行方案}
 \label{cha:chap04:myalg:euclid}
 
-当$w=0$时，DTW距离等价于欧氏距离，但是DTW距离相比欧氏距离多$O(L)$个比较操作和访存操作（$L$为时间序列长度），因此使用$Euclid(A,B)$代替$DTW(A,B,w)$。本章主要介绍$w=0$距离计算阶段的并行策略、并行算法设计以及实现细节和性能考虑。
+当$w=0$时，DTW距离等价于欧氏距离，但是DTW距离相比欧氏距离多$O(L)$个比较操作和访存操作（$L$为时间序列长度），因此使用$Euclid(A,B)$代替$DTW(A,B,w)$。本章主要介绍$w=0$距离计算模块的并行策略、并行算法设计以及实现细节和性能考虑。
 
 \subsection{并行策略}
 \label{cha:chap04:myalg:euclid:Strategies}
 
-如主流程图~\ref{fig:generalflow}所示，每个线程需要完成一个候选序列$S$对于数据集$D$中所有时间序列$T_j,j=1,2,\cdots,N$计算距离$SubDist(S,T_j),j=1,2,\cdots,N$获得$\mathcal{F}_S$。
+如主流程图~\ref{fig:generalflow}所示，每个线程需要完成一个候选序列$S$对于数据集$D$中所有时间序列$T_j,j=1,2,\cdots,N$计算距离$SubDist(S,T_j),j=1,2,\cdots,N$获得$\mathcal{F}_S$。当某个线程对应的候选序列$S$为$S=T_{i,s}^{len}$，$SubDist(T_{i,s}^{len},T_j)$包含$O(L)$个欧氏距离$Euclid(T_{i,s}^{len},T_{j,p}^{len}),p=1,2,\cdots,L-len+1$的计算过程并在取其中的最小值，如图~\ref{fig:euclidparallel}中的线程s及其计算结果。
 
-当某个线程对应的候选序列$S$为$S=T_{i,s}^{len}$，这里就候选序列$T_{i,s}^{len}$和其中一个时间序列的$T_j$的距离$SubDist(T_{i,s}^{len},T_j)$进行分析。$SubDist(T_{i,s}^{len},T_j)$包含$O(L)$个欧氏距离$Euclid(T_{i,s}^{len},T_{j,p}^{len}),p=1,2,\cdots,L-len+1$的计算过程并在取其中的最小值，如图~\ref{fig:euclidparallel}中的线程s及其计算结果。其中欧式距离$Euclid(T_{i,s}^{len},T_{j,p}^{len})$欧式距离定义如公式~\ref{equ:chap04:eucliddef}：
+欧氏距离的时间复杂度$O(L)$，如公式~\ref{equ:chap04:eucliddef}，但是线程之间的距离计算存在一定的重复，另一线程的欧式距离$Euclid(T_{i,s+1}^{len},T_{j,p+1}^{len})$可以在$Euclid(T_{i,s}^{len},T_{j,p}^{len})$的基础上以$O(1)$的时间复杂度完成，如公式~\ref{equ:chap04:euclid}和图~\ref{fig:euclidparallel}黄框元素对红框元素的依赖。
 \begin{equation}
 \label{equ:chap04:eucliddef}
 Euclid(T_{i,s}^{len},T_{j,p}^{len}) = \sum_{m=0}^{len-1}d(T_{i,s+m},T_{j,p+m})
 \end{equation}
-$Euclid(T_{i,s}^{len},T_{j,p}^{len})$的时间复杂度为$O(L)$。
-
-另一线程的欧式距离$Euclid(T_{i,s+1}^{len},T_{j,p+1}^{len})$可以在$Euclid(T_{i,s}^{len},T_{j,p}^{len})$的基础上以$O(1)$的时间复杂度完成，如公式~\ref{equ:chap04:euclid}和图~\ref{fig:euclidparallel}黄框元素对红框元素的依赖。
 \begin{equation}
 \label{equ:chap04:euclid}
 Euclid(T_{i,s+1}^{len},T_{j,p+1}^{len}) = Euclid(T_{i,s}^{len},T_{j,p}^{len}) + d(T_{i,s+len},T_{j,p+len}) - d(T_{i,s},T_{j,p})
 \end{equation}
 
-如图~\ref{fig:euclidparallel}，所有的$Euclid(T_{i,s+1}^{len},T_{j,p+1}^{len})$在满足$s\geq1,p\geq1$的条件下都可以在$Euclid(T_{i,s}^{len},T_{j,p}^{len})$以$O(1)$的时间内通过线程之间的协作完成。但是$Euclid(T_{i,0}^{len},T_{j,p}^{len})$和$Euclid(T_{i,0}^{len},T_{j,0}^{len})$没有可以依赖的计算结果，只能通过原始定义~\ref{equ:chap04:eucliddef}。$Euclid(T_{i,0}^{len},T_{j,p}^{len}),q=1,2,\cdots,L-len$和$Euclid(T_{i,s}^{len},T_{j,0}^{len}),s=1,2,\cdots,L-len$共有$2(L-len)$个元素，均摊到每个线程有两个元素的计算量，时间复杂度为$O(L)$。
+如图~\ref{fig:euclidparallel}，所有的$Euclid(T_{i,s+1}^{len},T_{j,p+1}^{len})$在满足$s\geq1,p\geq1$的条件下都可以在$Euclid(T_{i,s}^{len},T_{j,p}^{len})$以$O(1)$的时间内通过线程之间的协作完成。但是$Euclid(T_{i,0}^{len},T_{j,p}^{len})$和$Euclid(T_{i,0}^{len},T_{j,0}^{len})$没有可以依赖的计算结果，只能通过原始定义~\ref{equ:chap04:eucliddef}完成。$Euclid(T_{i,0}^{len},T_{j,p}^{len}),q=1,2,\cdots,L-len$和$Euclid(T_{i,s}^{len},T_{j,0}^{len}),s=1,2,\cdots,L-len$共有$2(L-len)$个元素，均摊到每个线程有两个元素的计算量，时间复杂度为$O(L)$。
 
-对于线程s来说，$SubDist(T_{i,s}^{len},T_j)$需要完成$L-len-1$次~\ref{equ:chap04:euclid}的依赖计算和2次~\ref{equ:chap04:eucliddef}次的原始计算，时间复杂度为$O(L)$。则线程s计算$SubDist(S,T_j),j=1,2,\cdots,N$获得$\mathcal{F}_S$时间复杂度为$O(NL)$，对于整个数据集的距离计算过程时间复杂度为$O(N^2L^3)$。
+对于线程s来说，$SubDist(T_{i,s}^{len},T_j)$需要完成$L-len-1$次~\ref{equ:chap04:euclid}的依赖计算和2次~\ref{equ:chap04:eucliddef}次的原始计算，时间复杂度为$O(L)$。则线程s计算$SubDist(S,T_j),j=1,2,\cdots,N$获得$\mathcal{F}_S$时间复杂度为$O(NL)$，对于w=0距离计算模块，时间复杂度为$O(N^2L^3)$。
 
 \begin{figure}[H] % use float package if you want it here
 	\centering
@@ -281,13 +230,7 @@ Euclid(T_{i,s+1}^{len},T_{j,p+1}^{len}) = Euclid(T_{i,s}^{len},T_{j,p}^{len}) + 
 	\caption{$Block(i,len)$中线程$s$计算$SubDist(T_{i,s}^{len},T_j),j=1,2,\cdots,L-len$}
 	\label{alg:kernel_ComputeDist}
 	\begin{algorithmic}[1]
-		\Require ~~\\
-		$T_{i,s}^{len}$:$block(i,len)$中线程$s$对应的候选序列，其中$(i,len)$作为距离计算grid一个block,满足$i \leq N,len \leq L$ \\
-		$T_j$:整个时间序列
-		\Ensure ~~\\
-		$matrix$：矩阵,存储$Block(i,len)$下所有$S$对应的$\mathcal{F}$
-		%$dist$:$T_{idx,s}^{len}$相对于每个时间序列的距离组成的数组
-		%\Function{kernel\_ComputeDist}{$T_{i}$}
+		\Function{kernel\_ComputeDist}{$T_{i},len,T_{j=1\to N}$}
 			\For{$j$ = $1$ to $N$}  \label{alg:kernel_ComputeDist:OutlineFor}
 				\State $buf0[s]$ $\gets$ $0$ \label{alg:kernel_ComputeDist:eucliddefst}
 				\State $buf[s]$ $\gets$ $0$
@@ -311,7 +254,7 @@ Euclid(T_{i,s+1}^{len},T_{j,p+1}^{len}) = Euclid(T_{i,s}^{len},T_{j,p}^{len}) + 
 				\State Save $maxdis$ to the $jth$ lines of $matrix$ \label{maxdisoutput}
 			\EndFor
 			%\State \Return $dist$
-		%\EndFunction
+		\EndFunction
 	\end{algorithmic}
 \end{breakablealgorithm}
 
@@ -328,31 +271,37 @@ Euclid(T_{i,s+1}^{len},T_{j,p+1}^{len}) = Euclid(T_{i,s}^{len},T_{j,p}^{len}) + 
 \subsection{实现细节与性能考虑}
 \label{cha:chap04:myalg:euclid:trick}
 
-章节~\ref{cha:chap04:myalg:euclid:Strategies}和~\ref{cha:chap04:myalg:euclid:algdesign}分别介绍了$w=0$距离计算的并行原理和算法设计。本章从实现细节和性能考虑角度介绍$w=0$距离计算阶段，主要涉及到Warp分歧和矩阵转置在并行算法上的应用。
+章节~\ref{cha:chap04:myalg:euclid:Strategies}和~\ref{cha:chap04:myalg:euclid:algdesign}分别介绍了w=0距离计算模块的并行原理和算法设计。本章从实现细节和性能考虑角度介绍w=0距离计算模块，主要涉及到线程束Warp分歧和矩阵转置在并行算法上的应用。
 
-首先，$w=0$距离计算每个线程执行相同的内容并保持均衡。为了保持各线程之间均衡，原来需要在$line$~\ref{alg:kernel_ComputeDist:dengjia2}进行的$Euclid(T_{i,0}^{len},T_{j,p}^{len})$计算是放在了$line$~\ref{alg:kernel_ComputeDist:dengjia1}进行。如果不做这一项优化，线程0直接在$line$~\ref{alg:kernel_ComputeDist:dengjia2}处直接进行$Euclid(T_{i,0}^{len},T_{j,p}^{len})$计算，会使线程0在整个线程过程中执行$O(NL)$次欧式距离原始计算，使得线程0的时间复杂度为$O(NL^2)$，又因为Warp分歧的原因会使线程0所在的Warp所有线程都和线程0消耗相同的时间，因而$Block$执行时间成倍地增加执行时间，当一个Block中只有一个Warp的情况下，执行时间会增大32倍。
+首先，w=0距离计算模块每个线程执行相同的内容并保持均衡。为了保持各线程之间均衡，原来需要在$line$~\ref{alg:kernel_ComputeDist:dengjia2}进行的$Euclid(T_{i,0}^{len},T_{j,p}^{len})$计算是放在了$line$~\ref{alg:kernel_ComputeDist:dengjia1}进行。如果不做这一项优化，线程0直接在$line$~\ref{alg:kernel_ComputeDist:dengjia2}处直接进行$Euclid(T_{i,0}^{len},T_{j,p}^{len})$计算，会使线程0在整个线程过程中执行$O(NL)$次欧式距离原始计算，使得线程0的时间复杂度为$O(NL^2)$，又因为Warp分歧的原因会使线程0所在的线程束Warp中所有线程都和线程0消耗相同的时间，因而执行时间成倍地增加执行时间，当一个线程块Block中只有一个线程束Warp的情况下，执行时间会增大32倍。
 
-其次，$line$~\ref{alg:kernel_ComputeDist:Warpdevergence1}和$line$~\ref{alg:kernel_ComputeDist:Warpdevergence2}之间需要进行同步。因为$Euclid(T_{i,s}^{len},T_{j,p}^{len}),s=1,2,\cdots,L-len$和$Euclid(T_{i,s}^{len},T_{j,p+1}^{len}),s=1,2,\cdots,L-len$使用同一段共享内存$buf$，$Euclid(T_{i,s+1}^{len},T_{j,p+1}^{len})$都是在$Euclid(T_{i,s}^{len},T_{j,p}^{len})$基础上计算即$buf[s]$基于$buf[s-1]$计算，所以$buf[1]$的更新必须发生在$buf[s],s>1$更新之后。
+其次，$line$~\ref{alg:kernel_ComputeDist:Warpdevergence1}和$line$~\ref{alg:kernel_ComputeDist:Warpdevergence2}之间需要进行同步。因为$Euclid(T_{i,s}^{len},T_{j,p}^{len}),~s=1,2,\cdots,L-len$和$Euclid(T_{i,s}^{len},T_{j,p+1}^{len}),~s=1,2,\cdots,L-len$使用同一段共享内存$buf$，$Euclid(T_{i,s+1}^{len},T_{j,p+1}^{len})$都是在$Euclid(T_{i,s}^{len},T_{j,p}^{len})$基础上计算即$buf[s]$基于$buf[s-1]$计算，所以$buf[1]$的更新必须发生在$buf[s],s>1$更新之后。
 
-最后主要介绍一下矩阵转置在算法上的应用，算法~\ref{alg:kernel_ComputeDist}的$line$~\ref{maxdisoutput}将多个候选序列相对于时间序列$T_j$的距离存在了对应矩阵$matrix$的第j行，如图~\ref{fig:euclidCoalescedSave}中$SubDist(S_m,T_j),m=1\to M$，则某个候选序列$S$对应的$\mathcal{F}$就存在于$matrix$中的某一列，如图~\ref{fig:euclidCoalescedSave}中$\mathcal{F}_{sm}$，$\mathcal{F}$对于最佳分割点阶段不是连续地址，这样不能直接进行最佳分割点计算。
+算法~\ref{alg:kernel_ComputeDist}的$line$~\ref{maxdisoutput}将多个候选序列相对于时间序列$T_j$的距离存在了对应矩阵$matrix$的第j行，如图~\ref{fig:euclidCoalescedSave}中$SubDist(S_m,T_j),m=1\to M$，则某个候选序列$S$对应的$\mathcal{F}$就存在于$matrix$中的某一列，如图~\ref{fig:euclidCoalescedSave}中$\mathcal{F}_{sm}$，$\mathcal{F}$对于GPU最佳分割点模块不是连续地址，这样不能直接进行最佳分割点计算。
 
 实际上$\mathcal{F}$和$SubDist(S_m,T_j),m=1\to M$处于一个矩阵的行和列，不可能同时存在于连续地址中。为了解决不能同时进行连续地址访问的问题，我们在
-$SubDist(S_m,T_j),m=1\to M$按行存储和$\mathcal{F}$按行读取之间添加了一个矩阵转置过程，如图~\ref{fig:euclidCoalescedSave}转化过程，这样就能保证$SubDist(S_m,T_j),m=1\to M$和$\mathcal{F}$都能进行连续地址的访问，从而保证了合并存储器的访问。而且矩阵转置有专门的算法可以使矩阵转置波特率达到全局内存之间数据拷贝的波特率~\cite{ruetsch2009optimizing}。
-
-我们这里转置过程参考了CUDA矩阵转置算法~\cite{ruetsch2009optimizing}，没有直接使用CUDA矩阵转置算法，主要基于两个原因：
-
-一是每个block产生的矩阵大小不一样，主要是因为每个Block中线程个数不同，如果统一使用相同的矩阵转置算法会造成计算资源的浪费；
-
-二是最佳分割点阶段要求$\mathcal{F}$之间是连续存储的，这就要求矩阵之间的存储不出现空白，但是按照CUDA矩阵转置算法调用会出现大量的空白，必须对转置之后的矩阵按行拼接起来，就需要在转置之后再增加一个拷贝调整过程，这样和我们优化效率的初衷不符。
-
+$SubDist(S_m,T_j),m=1\to M$按行存储和$\mathcal{F}$按行读取之间添加了一个矩阵转置过程，如图~\ref{fig:euclidCoalescedSave}转化过程，这样就能保证$SubDist(S_m,T_j),m=1\to M$和$\mathcal{F}$都能进行连续地址的访问，从而保证了合并存储器的访问。而且矩阵转置可以通过一定的方法使矩阵转置波特率达到全局内存之间数据拷贝的波特率~\cite{ruetsch2009optimizing}。
 \begin{figure}[H] % use float package if you want it here
 	\centering
 	\includegraphics[height=8.2cm]{euclidCoalescedSave.png}
-	\caption{矩阵转置同时满足距离计算阶段和最佳分割点计算阶段连续地址访问}
+	\caption{矩阵转置同时满足w=0距离计算模块和GPU最佳分割点计算模块连续地址访问}
 	\label{fig:euclidCoalescedSave}
 \end{figure}
 
+这里不能直接使用CUDA矩阵转置算法~\cite{ruetsch2009optimizing}，主要基于两个原因：
+
+一是每个Block产生的矩阵大小不一样，主要是因为每个Block中线程个数不同，如果统一使用相同的矩阵转置算法会造成计算资源的浪费；
+
+二是GPU最佳分割点模块要求$\mathcal{F}$之间是连续存储的，这就要求矩阵之间的存储不出现空白，但是按照CUDA矩阵转置算法调用会出现大量的空白，必须对转置之后的矩阵按行拼接起来，就需要在转置之后再增加一个拷贝调整过程，这样和我们优化效率的初衷不符。
+
 下面是我们如何对于以列形式存储的$\mathcal{F}$变成以行形式存储的方案，需要经过以下步骤：
+
+\begin{figure}[H] % use float package if you want it here
+	\centering
+	\includegraphics[height=9cm]{transpose.png}
+	\caption{w=0距离计算模块矩阵转置方法}
+	\label{fig:transpose}
+\end{figure}
 
 1.首先在每个Block申请$M*33$的共享内存空间，如图~\ref{fig:transpose}的红字部分，Block将原来矩阵中的第一行$SubDist(S_m,T_1),m=1,\to M$读入共享内存的第一列（实际上是每33地址存一个元素）,以此类推，直到存满32列共享内存；
 
@@ -362,21 +311,13 @@ $SubDist(S_m,T_j),m=1\to M$按行存储和$\mathcal{F}$按行读取之间添加�
 
 上面转置过程中，从全局内存中读入数据和向$\mathcal{F}$某个128B地址写入数据都是Coalesced过程，将共享内存设置成33列是为了避免出现存储体冲突，其中第33列元素不存储任何内容。
 
-\begin{figure}[H] % use float package if you want it here
-	\centering
-	\includegraphics[height=9cm]{transpose.png}
-	\caption{转置具体做法}
-	\label{fig:transpose}
-\end{figure}
 
-相比基于$DTW(A,B,w=0)$的距离计算，本算法减少不必要的访存过程和比较过程，在执行时间性能上会表现的比较好。当然算法也是有缺陷的，时间序列长度$L$不能超过1024，因为线程之间需要通信才能完成依赖计算，GTX 1080一个Block中最多允许1024个线程，超过1024个线程的依赖关系不能建立。
-
-\section{最佳分割点计算阶段并行方案}
+\section{GPU最佳分割点计算模块并行方案}
 \label{cha:chap04:myalg:infogain}
 
-最佳分割点计算阶段是根据距离计算阶段的结果$\mathcal{F}$，求出一个分割点$d_{osp(S)}$使数据集$D$获得的信息增益$g(D,(S,d_{osp(S)}))$最大。
+GPU最佳分割点计算模块是根据距离计算阶段的结果$\mathcal{F}$，求出一个分割点$d_{osp(S)}$使数据集$D$获得的信息增益$g(D,(S,d_{osp(S)}))$最大。
 
-算法~\ref{alg:OriginInfogain}为计算最佳分割点的原始算法，其中$line$~\ref{code:sort}是对于$\mathcal{F}$排序，时间复杂度为$O(N\log(N))$。Line~\ref{code:maxinfogain}循环是以步进的方式计算获得的最大信息增益以及对应的分割点，时间复杂度为$O(N)$。因此从候选序列$S$对应的$\mathcal{F}$到计算最佳分割点复杂度为$O(N\log(N))$，但是对于整个候选序列集合$SubSet(D)$，时间复杂度度为$O(N^2L^2\log(N))$。
+算法~\ref{alg:OriginInfogain}为最佳分割点计算的原始算法，其中$line$~\ref{code:sort}是对于$\mathcal{F}$排序，时间复杂度为$O(N\log(N))$。Line~\ref{code:maxinfogain}循环是以步进的方式计算获得的最大信息增益以及对应的分割点，时间复杂度为$O(N)$。因此从候选序列$S$对应的$\mathcal{F}$到最佳分割点计算复杂度为$O(N\log(N))$，但是对于整个候选序列集合$SubSet(D)$，时间复杂度度为$O(N^2L^2\log(N))$。
 
 \begin{algorithm}
 	\caption{最佳分割点计算原始算法}
@@ -398,14 +339,14 @@ $SubDist(S_m,T_j),m=1\to M$按行存储和$\mathcal{F}$按行读取之间添加�
 	\end{algorithmic}
 \end{algorithm}
 
-最佳分割点总的时间复杂度为$O(N^2L^2\log(N))$，仅次于距离计算阶段的$O(N^2L^3)$(使用重用策略之后)。当数据集的大小$N$增大时，最佳分割点占比越高，从而影响整体执行时间。
+最佳分割点总的时间复杂度为$O(N^2L^2\log(N))$，仅次于距离计算阶段的$O(N^2L^3)$(使用重用策略之后)。当数据集的大小$N$增大时，最佳分割点占比越高，从而影响整体执行时间，因此降低最佳分割点计算的时间复杂度。
 
 \subsection{启发式算法设计}
 \label{cha:chap04:myalg:infogain:design}
 
 我们需要设计一个算法将最佳分割点计算的时间复杂度从$O(N\log(N))$降到$O(N)$，在这里，我们使用一种启发式计算分割点的算法来搜索最佳分割点。
 
-图~\ref{fig:distancedistribute}为子序列$S$相对于数据集$D$中时间序列的距离-类标的集合$\mathcal{F}$，其中，横轴表示时间序列在数据集中的位置$j$，纵轴表示$S$与$j$位置时间序列$T_j$之间的距离$SubDist(S,T_j)$，颜色表示$T_j$的类标(A/B)。
+图~\ref{fig:distancedistribute}为子序列$S$相对于数据集$D$中时间序列的距离-类标的集合$\mathcal{F}$，其中，横轴表示时间序列在数据集中的位置$j$，纵轴表示$S$与$j$位置时间序列$T_j$之间的距离$SubDist(S,T_j)$，不同的颜色表示$T_j$的不同的类标(A/B)。最佳分割点计算的目的在于寻找一个距离阈值$d_{th}=d_{osp(S)}$使得数据集$D$获得的信息增益$g(D,(S,d_{th}))$尽可能大，满足$g(D,(S,d_{osp(S)}))>g(D,(S,d_{th})),\forall d_{th}\in \mathbb{R}_+$，如图~\ref{fig:distancedistribute}，并不是对于数据集按照距离$SubDist(S,T_j)$进行排序。但是算法~\ref{alg:OriginInfogain}是对于所有可能产生的信息增益$g(D,(S,d_{th}))$取值都进行了计算，相当于获得了一个全局最优值。
 \begin{figure}[H] % use float package if you want it here
 	\centering
 	\includegraphics[height=6.2cm]{distancedistribute.png}
@@ -413,36 +354,24 @@ $SubDist(S_m,T_j),m=1\to M$按行存储和$\mathcal{F}$按行读取之间添加�
 	\label{fig:distancedistribute}
 \end{figure}
 
-最佳分割点计算的目的在于寻找一个距离阈值$d_{th}=d_{osp(S)}$使得数据集$D$获得的信息增益$g(D,(S,d_{th}))$尽可能大，如图~\ref{fig:distancedistribute}，满足$g(D,(S,d_{osp(S)}))>g(D,(S,d_{th})),\forall d_{th}\in \mathbb{R}_+$，并不是对于数据集按照距离$SubDist(S,T_j)$进行排序。算法~\ref{alg:OriginInfogain}是对于所有可能产生的信息增益$g(D,(S,d_{th}))$取值都进行了计算，相当于获得了一个全局最优值。
-
 相比计算全局最优值，这里提供一种启发式的最优值搜索方式，二分地搜索到一个阈值，使得信息增益最大。首先介绍一下二分搜索地评价指标，根据公式~\ref{equ:chap2:Infogain2}可知，信息增益$g(D,(S,d_{th}))$最大化等价于条件熵$H(D|(S,d_{th}))$最小化\footnote{条件熵$H(D|(S,d_{th}))$恒大于$0$}。
-存在一个点$d_{th}$将数据集$D$分为两个子集$D_1 = \left\lbrace T,SubDist(S,T)<d_{th} \& T\in D\right\rbrace $和$D_2 = \left\lbrace T,SubDist(S,T) \geq d_{th}\& T\in D\right\rbrace$，则条件熵$H(D|(S,d_{th}))$表达式如公式~\ref{equ:chap4:ConditionalEntropy}，
+存在一个点$d_{th}$将数据集$D$分为两个子集$D_1 = \left\lbrace T,SubDist(S,T)<d_{th} \& T\in D\right\rbrace $和$D_2 = \left\lbrace T,SubDist(S,T) \geq d_{th}\& T\in D\right\rbrace$，则条件熵$H(D|(S,d_{th}))$表达式如公式~\ref{equ:chap4:ConditionalEntropy}，为了方便叙述，这里将$\frac{|D_m|}{|D|}H(D_m),m=1,2$定义为$f(D_m),m=1,2$（对于数据集$D$而言，$|D|$为常数）。
 \begin{equation}
 \label{equ:chap4:ConditionalEntropy}
 H(D|(S,d_{th})) = \frac{|D_1|}{|D|}H(D_1)+\frac{|D_2|}{|D|}H(D_2) = f(D_1) + f(D_2)
 \end{equation}
-为了方便叙述，这里将$\frac{|D_m|}{|D|}H(D_m),m=1,2$定义为$f(D_m),m=1,2$（对于数据集$D$而言，$|D|$为常数）。
 
-假设在区间$(0,\infty)$一个分割点$d_{th1}$，将数据集$D$分为$D_1$和$D_2$。如果$f(D_1)>f(D_2)$，表示$D_1$的熵更高一点，可能在区间$(0,d_{th1})$存在一个阈值$d_{th2}$，使得条件熵$H(D|(S,d_{th_2}))$更低一些。这里对于$D$重新进行分割，将临近$D_1$在$(d_{th2},d_{th1})$地元素归入$D_2$数据集内，可能使$f(D_1)+f(D_2)$更小；反之，$(d_{th1},\infty$向相反方向寻找阈值，不断循环下去，呈现一个二分的搜索路线，直到分割点的搜索区间为空$0$为止。
+如图~\ref{fig:binarysearch}，这里将距离计算的最大最小值$(d_{low},d_{high})$作为分割点的搜索区间。假设在区间$(d_{low},d_{high})$一个分割点$d_{th1}$，将数据集$D$分为$D_1$和$D_2$。如果$f(D_1)>f(D_2)$，表示$D_1$的熵更高一点，可能在区间$(d_{low},d_{th1})$存在一个阈值$d_{th2}$，使得条件熵$H(D|(S,d_{th_2}))$更低一些。这里对于$D$重新进行分割，将临近$D_1$在$(d_{th2},d_{th1})$地元素归入$D_2$数据集内，可能使$f(D_1)+f(D_2)$更小；反之，$(d_{th1},d_{high})$向相反方向寻找阈值，不断循环下去，呈现一个二分的搜索路线，直到分割点的搜索区间为0为止。每一个区间对应数据集$D$一个集合，比如$(d_{low},d_{high})$ 对应的整个$\mathcal{F}$，当区间为0，即集合为$\phi$。任何一个区间对应的集合中可能存在不止一个元素，我们需要选择一个点作为分割点来对$D$进行切割，这里选择集合中最后一个元素作为集合切割的阈值，集合初始是无序的，最后一个元素不一定是最大或者最小的元素。 
 
-上文每个区间都对应一个集合，比如$(0,\infty)$表示数据集$D$对应的所有$\mathcal{F}_j,j=1\to N$，在实际算法实现上没有使用区间的概念而是使用区间对应的集合$\left\lbrace \mathcal{F}_j,j=left\to right\right\rbrace $来进行二分搜索，当区间为0，即集合为$\phi$。
-
-在任何一个区间对应的集合中可能存在不止一个元素，我们需要选择一个点作为阈值来对$D$进行切割，这里按照快排的思路和局部性的考虑选用集合最后一个元素（集合初始是无序的，最后一个元素不一定是最大或者最小）作为集合切割的阈值。 
-
-算法~\ref{alg:HeuristicSplitInfogain}是启发式求最佳分割点算法：
-
-算法中$dist$中表示候选序列$S$对数据集$D$时间序列的距离数组，即$\mathcal{F}$对应距离部分，$label$表示时间序列对应的类标。
-
-$line$~\ref{alg:Heuristic:initial}为区间初始化，等价于搜索区间$(0,\infty)$；
-
-$line$~\ref{alg:Heuristic:partion}是按照区间最后一个元素为切割点进行切割，详见算法~\ref{alg:HeuristicSplitInfogainBase}；
-
-$line$~\ref{alg:Heuristic:beforecalcentropy}-~\ref{alg:Heuristic:aftercalcentropy}为计算$f(D_1)$和$f(D_2)$并在$line$~\ref{alg:Heuristic:compare}比较并缩小搜索区间，可以在$O(1)$时间复杂度内完成；
-
-$line$~\ref{alg:Heuristic:stop}表示如果连续两次条件熵呈增大趋势则返回上一次的分割点和条件熵。
+\begin{figure}[H] % use float package if you want it here
+	\centering
+	\includegraphics[height=6.2cm]{binarysearch.png}
+	\caption{启发式计算最佳分割点}
+	\label{fig:binarysearch}
+\end{figure}
 
 \begin{breakablealgorithm}
-	\caption{启发式算法计算最佳分割点算法$HeuristicOptimalSplitPoint$}
+	\caption{启发式算法最佳分割点计算算法$HeuristicOptimalSplitPoint$}
 	\label{alg:HeuristicSplitInfogain}
 	\begin{algorithmic}[1]
 %	\Requre $dist,label$
@@ -477,9 +406,21 @@ $line$~\ref{alg:Heuristic:stop}表示如果连续两次条件熵呈增大趋势�
 	\end{algorithmic}
 \end{breakablealgorithm}
 
+算法~\ref{alg:HeuristicSplitInfogain}是启发式求最佳分割点算法：
+
+算法中$dist$中表示候选序列$S$对数据集$D$时间序列的距离数组，即$\mathcal{F}$对应距离部分，$label$表示时间序列对应的类标。
+
+$line$~\ref{alg:Heuristic:initial}为区间初始化，等价于搜索区间$(d_{low},d_{high})$；
+
+$line$~\ref{alg:Heuristic:partion}是按照区间最后一个元素为切割点进行切割，详见算法~\ref{alg:HeuristicSplitInfogainBase}；
+
+$line$~\ref{alg:Heuristic:beforecalcentropy}-~\ref{alg:Heuristic:aftercalcentropy}为计算$f(D_1)$和$f(D_2)$并在$line$~\ref{alg:Heuristic:compare}比较并缩小搜索区间，可以在$O(1)$时间复杂度内完成；
+
+$line$~\ref{alg:Heuristic:stop}表示如果连续两次条件熵呈增大趋势则返回上一次的分割点和条件熵。
+
 算法~\ref{alg:HeuristicSplitInfogain}可以看出，启发式是使用一种搜索的方式获得最佳分割点，我们可以把这个搜索分割点的过程称为最佳分割点搜索路线。
 
-算法~\ref{alg:HeuristicSplitInfogainBase}是启发式计算最佳分割点中需要调用的算法，负责数据集$D$切割成$D_1,D_2$的函数$PARTION$.%，计算熵$ENTROPY$，条件熵$ENTROPYSPLIT$。
+算法~\ref{alg:HeuristicSplitInfogainBase}是启发式最佳分割点计算中需要调用的算法，负责数据集$D$切割成$D_1,D_2$的函数$PARTION$.%，计算熵$ENTROPY$，条件熵$ENTROPYSPLIT$。
 \begin{algorithm}
 	\caption{最佳分割点计算的调用算法}
 	\label{alg:HeuristicSplitInfogainBase}
@@ -505,9 +446,7 @@ $line$~\ref{alg:Heuristic:stop}表示如果连续两次条件熵呈增大趋势�
 \subsection{随机排列shffule及其作用}
 \label{cha:chap04:myalg:infogain:shuffle}
 
-章节~\ref{cha:chap02:def}提及Shapelet的定义和本质，存在一种模式，数据集中一种时间序列$(label \in A)$和这种模式表现出较小的距离，另外一种$(label \in B)$则表现出较大的距离，Shapelet的本质是寻找这种模式。反之可以认为，与这种模式表现出较小距离的时间序列都存在能够表达这种模式的子序列，并且能够表达这种模式的候选序列不止一个。
-
-能够表达这种特定模式的候选序列对于数据集中各时间序列表现出相似的距离度量。如图~\ref{fig:similardistance}，$S1$、$S2$是两个能够区分两类时间序列的候选序列，两者相对于数据集中各时间序列表现的距离很接近。如果使用上述启发式算法，最佳分割点的搜索路线有可能是一致的，最后导致的分类效果是一样的。
+章节~\ref{cha:chap02:def}提及Shapelet的定义和本质，存在一种模式，数据集中一种时间序列$(label \in A)$和这种模式表现出较小的距离，另外一种$(label \in B)$则表现出较大的距离，Shapelet的本质是寻找这种模式。反之可以认为，与这种模式表现出较小距离的时间序列都存在能够表达这种模式的子序列，并且能够表达这种模式的候选序列不止一个。$S1$、$S2$是两个具有高分类能力的候选序列，两者相对于数据集中各时间序列表现的距离很相似。如果使用上述启发式算法，最佳分割点的搜索路线有可能是一致的，最后导致的分类效果是一样的，如图~\ref{fig:similardistance}。
 
 \begin{figure}[H] % use float package if you want it here
 	\centering
@@ -516,9 +455,9 @@ $line$~\ref{alg:Heuristic:stop}表示如果连续两次条件熵呈增大趋势�
 	\label{fig:similardistance}
 \end{figure}
 
-启发式算法寻找的不是全局最优值，并不能保证这种唯一的搜索路线就能找最佳分割点。我们需要利用多个候选序列能够表达这种模式这一特点，使多个候选序列对应的启发式算法尽可能选择不同的最佳分割点搜索路线，目的是多个搜索路线中有某种搜索路线获得的结果和全局最优最接近。如何获得不同最佳分割点搜索路线，关键在于使用哪个点进行算法~\ref{alg:HeuristicSplitInfogainBase}的$patition$，启发式算法使用集合最后一个元素进行分割，而我们需要局部集合的最后一个元素不是同一个元素来使搜索路线不同，因此在计算最佳分割点之前需要对于$\mathcal{F}$进行随机排列Shuffle。
+启发式算法寻找的不是全局最优值，并不能保证这种唯一的搜索路线就能找最佳分割点。我们需要利用相似性这一特点，使多个候选序列对应的启发式算法尽可能选择不同的最佳分割点搜索路线，目的是多个搜索路线中有某种搜索路线获得的结果和全局最优最接近。如何获得不同最佳分割点搜索路线，关键在于使用哪个元素进行算法~\ref{alg:HeuristicSplitInfogainBase}的$patition$，启发式算法使用集合最后一个元素进行分割，而我们需要局部集合的最后一个元素不是同一个元素来使搜索路线不同，因此在最佳分割点计算之前需要对于$\mathcal{F}$进行随机排列Shuffle。
 
-为了获得不同的最佳分割点搜索方式，在进行启发式算法搜索最佳分割点之前，对于$\mathcal{F}$进行随机排列Shuffle。算法~\ref{alg:ReservoirShuffle}是随机排列算法伪码，本文选择Kunth shuffle算法（可以使每个元素以$1/N$的概率出现在每个位置）进行随机排列，至于算法的选择原因在章节~\ref{cha:chap04:Heuristic:Skill}中结合GPU的使用介绍。
+为了获得不同的最佳分割点搜索方式，在进行启发式算法搜索最佳分割点之前，对于$\mathcal{F}$进行随机排列Shuffle。算法~\ref{alg:ReservoirShuffle}是随机排列算法伪码，本文选择Kunth shuffle算法进行随机排列，至于算法的选择原因在章节~\ref{cha:chap04:Heuristic:Skill}中结合GPU的使用介绍。
 
 \begin{algorithm}
 	\caption{对于$dist$和对应的$label$进行shuffle,$ReservoirShuffle()$}
@@ -543,27 +482,21 @@ $line$~\ref{alg:Heuristic:stop}表示如果连续两次条件熵呈增大趋势�
 		\EndFunction
 	\end{algorithmic}
 \end{algorithm}
-
 \subsection{实现细节与性能考虑}
 \label{cha:chap04:Heuristic:Skill}
 
-章节~\ref{cha:chap04:myalg:infogain:design}和章节~\ref{cha:chap04:myalg:infogain:shuffle}讲述了启发式计算最佳分割点的过程，本章就算法的并行实现细节和性能考虑予以介绍。
+章节~\ref{cha:chap04:myalg:infogain:design}和章节~\ref{cha:chap04:myalg:infogain:shuffle}讲述了启发式最佳分割点计算的过程，本章就算法的并行实现细节和性能考虑予以介绍。
 
-章节~\ref{cha:chap04:myalg:infogain:shuffle}提及了Shuffle的选择吗，有多个可以选择的方案：Warp并行随机排列算法、调用Shuffle device函数、自实现随机排列函数。其中，Warp并行随机排列算法~\cite{nvidia2015c}虽然可以快速的实现一个随机排列算法，但是要求一个Warp内所有shuffle结果必须是一致的，不符合章节~\ref{cha:chap04:myalg:infogain:shuffle}使用shuffle的原因。调用现成的Shuffle device函数产生一个随机排列Index，对于每个线程需要占用$O(N)$的空间需要较多的GPU硬件资源。这里我们选择实现Kunth shuffle算法，可以在$O(N)$的时间复杂度下，以$O(1)$的额外空间复杂度完成随机排列Shuffle，算法按照蓄水池算法的原理，可以使每个元素出现在每个位置的概率为$O(1/N)$。
+章节~\ref{cha:chap04:myalg:infogain:shuffle}提及了随机排列Shuffle的选择，有多个可以选择的方案：线程束Warp并行随机排列算法、调用Shuffle device函数、自实现随机排列函数。其中，线程束Warp并行随机排列算法~\cite{nvidia2015c}虽然可以快速的实现一个随机排列算法，但是要求一个Warp内所有随机排列shuffle结果必须是一致的，不符合章节~\ref{cha:chap04:myalg:infogain:shuffle}使用shuffle的原因。调用现成的Shuffle device函数产生一个随机排列Index，这里每个线程需要占用$O(N)$的空间，需要较多的GPU硬件资源。这里我们选择实现Kunth shuffle算法，可以在$O(N)$的时间复杂度下，以$O(1)$的额外空间复杂度完成随机排列Shuffle，算法按照蓄水池算法的原理，可以使每个元素出现在每个位置的概率为$O(1/N)$。
 
 算法~\ref{alg:ReservoirShuffle}需要为每个线程提供不同的随机数发生器$rng$，否则，不同线程中使用相同的$rng$，最后导致随机数生成的过程是一致，Shuffle之后的结果依然是一致的。每个线程的随机发生器$rng$需要在进行启发式算法之前随机初始化，并且使用线程ID作为随机发生器的初始化参数之一。
 
-最佳分割点计算阶段读入$\mathcal{F}$的方法：因为$\mathcal{F}$中的距离在距离阶段存储在连续空间中，每个线程读取一个$\mathcal{F}$的距离；$label$是通过合并内存访问读取到共享内存中。
-
+最佳分割点计算模块读入$\mathcal{F}$的方法：因为$\mathcal{F}$中的距离在距离模块存储在连续空间中，每个线程读取一个$\mathcal{F}$的距离；$label$是通过合并内存访问读取到共享内存中。
 
 
 \section{本章小结}
 
-本章主要介绍总体方案设计中三处并行算法设计：w>0距离计算阶段并行方案，w=0距离计算阶段并行方案，最佳分割点计算阶段并行方案。
-w>0距离计算阶段中每个线程负责一系列候选序列和几个时间序列之间的并行距离计算，并且使用全局内存访问和存储体冲突等技术和并行算法结合，加速了并行算法的执行。
-w=0距离计算阶段通过线程之间协作完成了多个候选序列对于整个数据集中的时间序列并行计算距离，并且通过特定的矩阵转置方法使w=0距离计算阶段和最佳分割点阶段都可以同时进行连续地址访问，大大减少全局内存访存延时。
-最佳分割点计算阶段使用了启发式计算最佳分割点和随机排列的方法完成了最佳分割点的并行计算，两者的结合保证了能够在准确率不降的前提下降低最佳分割点计算的执行时间。
-
-%首先对于算法的整体流程和并行方案进行了概括介绍；然后对于距离计算阶段分别介绍针对和、算法设计以及并行实现细节和性能考虑；最后介绍了启发式计算最佳分割点的算法设计、Shuffle的使用及作用、并行实现细节和性能考虑。
-
+本章主要介绍总体方案设计中三处并行算法设计：w>0距离计算模块并行方案，w=0距离计算模块并行方案，GPU最佳分割点计算模块并行方案。w>0距离计算模块中每个线程负责一系列候选序列和几个时间序列之间的并行距离计算，海量线程组合起来完整整个模块的计算，并且使用合并内存访问和存储体冲突等技术和并行算法结合，加速了并行算法的执行。
+w=0距离计算模块通过线程之间协作完成了多个候选序列对于整个数据集中的时间序列并行计算距离，并且通过特定的矩阵转置方法使w=0距离计算模块和最佳分割点模块都可以同时进行连续地址访问，大大减少全局内存访存延时。
+最佳分割点计算模块使用了启发式最佳分割点计算和随机排列的方法完成了最佳分割点的并行计算，两者的结合保证了能够在准确率不降的前提下降低最佳分割点计算的执行时间。
 

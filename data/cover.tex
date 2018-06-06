@@ -62,7 +62,7 @@
   %
   % 关键词用“英文逗号”分割
   ckeywords={时间序列, GPU, CUDA, 并行, 距离},
-  ekeywords={Time Series, GPU,CUDA, Parellel, Distance}
+  ekeywords={Time Series, GPU, CUDA, Parellel, Distance}
 }
 
 % 定义中英文摘要和关键字
@@ -78,7 +78,7 @@
 
 3.在计算最佳分割点，使用一种启发式计算最佳分割点的方法在保证准确率的基础上来减少计算信息增益需要的时间。
 
-实验表明，本文提出的算法能够大幅提高Shapelet发现的并行速度，相比已有优化算法效率都有较大幅度提高，其中相比原始CPU算法提高834到3692倍，平均1945倍；相比基于剪枝的算法提高21倍到51倍之间，平均41倍；相比已有GPU并行算法提高3倍到21倍，平均13倍。同时，本文并行算法对于大数据集也进行了实验，并取得了较好的结果。
+实验表明，本文提出的算法能够大幅提高Shapelet发现的并行速度，相比已有优化算法效率都有较大幅度提高，其中相比原始CPU算法提高834到3692倍，平均1945倍；相比基于剪枝的算法提高21倍到51倍之间，平均41倍；相比已有GPU并行算法提高4倍到11倍，平均6.3倍。同时，本文并行算法对于大数据集也进行了实验，并取得了较好的结果。
 
  
  
@@ -102,9 +102,7 @@ To solve the time-consuming problem of Shapelet discovery, A parallel Shapelet a
 
 3. In the optimal split point calculation stage, a heuristic method used for calculating the optimal split point has been used, which significantly reduced the elapsed time on condition of achieving comparable classification accuracy.
 
-%Experiments show that the proposed algorithm in this paper can greatly increase the parallel speed, which is about 13 times higher than existing optimization algorithms (including existing parallel processor algorithms).	
-
-Experiments show that the algorithm proposed in this paper can greatly increase the parallel speed of Shapelet discovery,which has a significant increasement in efficiency compared with the existing optimization algorithms. The proposed algorithm increased from 834x+ to 3692x+, with an average of 1945x+ compared to the CPU Naive algorithm. The speedup of the algorithm from the pruning-based algorithm is between 21x+ and 51x+, 41x+ in average. the algorithm is faster than the existing GPU parallel algorithms by 3x+$\sim$21x+, 13x+ in average. At the same time, the parallel algorithm of this paper has also conducted experiments on large datasets and achieved excellent perfomance.
+Experiments show that the algorithm proposed in this paper can greatly increase the parallel speed of Shapelet discovery,which has a significant increasement in efficiency compared with the existing optimization algorithms. The proposed algorithm increased from 834x+ to 3692x+, with an average of 1945x+ compared to the CPU Naive algorithm. The speedup of the algorithm from the pruning-based algorithm is between 21x+ and 51x+, 41x+ in average. the algorithm is faster than the existing GPU parallel algorithms by 4x+$\sim$11x+, 6.3x+ in average. At the same time, the parallel algorithm of this paper has also conducted experiments on large datasets and achieved excellent perfomance.
 	
 \end{eabstract}
 
